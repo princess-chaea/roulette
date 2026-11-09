@@ -12,6 +12,21 @@
       return segment;
     });
   }
+  function visualSegments(prizes, layout = 'grouped') {
+    const options = segments(prizes);
+    const copies = layout === 'split' && options.length > 1 ? 2 : 1;
+    const slices = [];
+    for (let copy = 0; copy < copies; copy++) {
+      const offset = copy * 360 / copies;
+      for (const option of options) {
+        const start = offset + option.start / copies;
+        const end = offset + option.end / copies;
+        slices.push({ ...option, start, end, midpoint: (start + end) / 2,
+          probability: option.probability / copies, sliceKey: `${option.id}:${copy}` });
+      }
+    }
+    return slices;
+  }
   function pick(prizes, unit) {
     if (!Number.isFinite(unit) || unit < 0 || unit >= 1) throw new RangeError('Random value must be in [0, 1).');
     const options = segments(prizes);
@@ -23,17 +38,19 @@
     if (direction === 'counterclockwise') return current - laps * 360 - (normalized - destination + 360) % 360;
     return current + laps * 360 + (destination - normalized + 360) % 360;
   }
-  function finishPlan(prizes, selected, current = 0, direction = 'clockwise') {
-    const options = segments(prizes);
-    const index = options.findIndex(p => p.id === selected.id);
+  function finishPlan(prizes, selected, current = 0, direction = 'clockwise', layout = 'grouped') {
+    const options = visualSegments(prizes, layout);
+    const index = options.findIndex(p => p.id === selected.id &&
+      (selected.sliceKey === undefined || p.sliceKey === selected.sliceKey));
     if (index < 0) throw new RangeError('Winning segment is unavailable.');
+    const winner = options[index];
     const sign = direction === 'counterclockwise' ? -1 : 1;
     const neighbor = options[(index + (sign === 1 ? 1 : options.length - 1)) % options.length];
-    const width = selected.end - selected.start;
+    const width = winner.end - winner.start;
     const amplitude = options.length > 1 ? Math.min(5, width * .28, (neighbor.end - neighbor.start) * .28) : 0;
     const margin = amplitude ? Math.min(1.8, amplitude * .35) : Math.min(8, width / 4);
-    const landingAngle = sign === 1 ? selected.end - margin : selected.start + margin;
-    const target = rotationFor({ ...selected, midpoint: landingAngle }, current, 5, direction);
+    const landingAngle = sign === 1 ? winner.end - margin : winner.start + margin;
+    const target = rotationFor({ ...winner, midpoint: landingAngle }, current, 5, direction);
     const boundary = amplitude ? target - sign * margin : target;
     const offsets = amplitude ? [0, amplitude, -amplitude * .65, amplitude * .42, -amplitude * .22, margin] : [0, 0];
     return { landingAngle, target, boundary, amplitude, frames: offsets.map(delta => boundary + sign * delta) };
@@ -51,7 +68,7 @@
         easing: index === 0 ? 'cubic-bezier(0.3333333333333333,1,0.6666666666666666,1)' : 'ease-in-out'
       }))];
   }
-  const api = { available, total, segments, pick, rotationFor, finishPlan, animationFrames };
+  const api = { available, total, segments, visualSegments, pick, rotationFor, finishPlan, animationFrames };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.RouletteMath = api;
 })();

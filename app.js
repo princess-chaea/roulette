@@ -10,13 +10,14 @@
   const initialState = () => ({
     version: 1,
     title: '우리 반 행운 뽑기',
-    mode: 'pose',
+    mode: 'pose', wheelLayout: 'grouped',
     prizes: ['블루투스 스피커', '문구 세트', '간식 꾸러미', '달콤한 초콜릿'].map((name, index) => ({ id: crypto.randomUUID(), name, quantity: [1, 3, 6, 10][index], rank: index + 1 })),
     history: [], pending: null
   });
   let storageOK = true;
   function validState(value) {
     return value && value.version === 1 && typeof value.title === 'string' && value.title.length <= 40 && ['pose', 'circle'].includes(value.mode) &&
+      (value.wheelLayout === undefined || ['grouped', 'split'].includes(value.wheelLayout)) &&
       Array.isArray(value.prizes) && value.prizes.length > 0 && value.prizes.length <= 12 &&
       value.prizes.every((p, i) => typeof p.id === 'string' && typeof p.name === 'string' && p.name.length <= 40 && p.rank === i + 1 && Number.isInteger(p.quantity) && p.quantity >= 0 && p.quantity <= 999) &&
       new Set(value.prizes.map(p => p.id)).size === value.prizes.length &&
@@ -28,7 +29,7 @@
       const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return initialState();
       const parsed = JSON.parse(data);
-      if (validState(parsed)) return parsed;
+      if (validState(parsed)) { parsed.wheelLayout ??= 'grouped'; return parsed; }
       storageOK = false;
     } catch { storageOK = false; }
     return initialState();
@@ -84,13 +85,13 @@
     $('total-pill').textContent = '총 ' + total + '개';
     $('remaining-pill').textContent = total + '개 남음';
     $('validation-message').textContent = getError();
-    $('go-draw').disabled = !!getError();
     $('add-prize').disabled = state.prizes.length >= 12;
     document.querySelectorAll('[data-delete]').forEach(button => button.disabled = state.prizes.length === 1);
     $('history-count').textContent = state.history.length;
   }
   function renderEditor() {
     $('event-title').value = state.title;
+    document.querySelectorAll('[name=wheel-layout]').forEach(input => { input.checked = input.value === state.wheelLayout; });
     $('prize-rows').replaceChildren();
     state.prizes.forEach(prize => {
       const row = el('div', 'prize-row');
@@ -139,12 +140,14 @@
   }
   function renderWheel(containerId) {
     const svg = svgNode('svg', { viewBox: '0 0 600 600', role: 'img', 'aria-label': '남은 상품 개수에 비례한 경품 룰렛' });
-    const options = math.segments(state.prizes);
+    const options = math.visualSegments(state.prizes, state.wheelLayout);
     options.forEach(segment => {
       const [x1, y1] = point(segment.start), [x2, y2] = point(segment.end);
       const shape = segment.end - segment.start >= 359.99
         ? svgNode('circle', { cx: 300, cy: 300, r: 290, fill: color(segment) })
         : svgNode('path', { d: `M300 300L${x1} ${y1}A290 290 0 ${segment.end - segment.start > 180 ? 1 : 0} 1 ${x2} ${y2}Z`, fill: color(segment), stroke: '#fffdf2', 'stroke-width': 2 });
+      shape.setAttribute('data-prize-id', segment.id);
+      shape.setAttribute('data-slice-key', segment.sliceKey);
       shape.append(svgNode('title', {}, `${segment.rank}등 ${segment.name}: ${(segment.probability * 100).toFixed(1)}%`));
       svg.append(shape);
       const [x, y] = point(segment.midpoint, 190);
@@ -240,10 +243,13 @@
   }
   async function beginRotation(direction) {
     const random = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
-    const selected = firstPrizeMode.take(math.segments(state.prizes)) || math.pick(state.prizes, random);
+    const prize = firstPrizeMode.take(math.segments(state.prizes)) || math.pick(state.prizes, random);
+    const candidates = math.visualSegments(state.prizes, state.wheelLayout).filter(segment => segment.id === prize?.id);
+    const sliceRandom = candidates.length > 1 ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : 0;
+    const selected = candidates[Math.floor(sliceRandom * candidates.length)];
     renderOperatorMode();
     if (!selected) { busy = false; updateControls(); return; }
-    const plan = math.finishPlan(state.prizes, selected, rotation, direction);
+    const plan = math.finishPlan(state.prizes, selected, rotation, direction, state.wheelLayout);
     const { target, landingAngle } = plan;
     state.pending = { id: crypto.randomUUID(), prizeId: selected.id, rank: selected.rank, prize: selected.name, name: `${state.history.length + 1}회차`, time: new Date().toISOString(), landingAngle, direction };
     save();
@@ -443,7 +449,10 @@
     renderEditor(); changed(); $('prize-rows').lastElementChild.querySelector('input').focus();
   });
   $('event-title').addEventListener('input', event => { state.title = event.target.value; save(); });
-  $('go-draw').addEventListener('click', () => { if (!getError()) location.hash = 'draw'; });
+  document.querySelectorAll('[name=wheel-layout]').forEach(input => input.addEventListener('change', () => {
+    if (!input.checked || busy) return;
+    state.wheelLayout = input.value; changed();
+  }));
   $('manual-spin').addEventListener('click', () => spin());
   $('show-history').addEventListener('click', showHistory);
   $('close-history').addEventListener('click', () => $('history-dialog').close());
@@ -459,9 +468,10 @@
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
   renderEditor(); changed(); showMotionStage('presence'); route(); updateSaveStatus();
   if (state.pending) {
-    const recovered = math.segments(state.prizes).find(p => p.id === state.pending.prizeId);
+    const savedAngle = state.pending.landingAngle;
+    const recoveryOptions = math.visualSegments(state.prizes, state.wheelLayout).filter(p => p.id === state.pending.prizeId);
+    const recovered = recoveryOptions.find(p => savedAngle > p.start && savedAngle < p.end) || recoveryOptions[0];
     if (recovered) {
-      const savedAngle = state.pending.landingAngle;
       const midpoint = Number.isFinite(savedAngle) && savedAngle > recovered.start && savedAngle < recovered.end ? savedAngle : recovered.midpoint;
       rotation = math.rotationFor({ ...recovered, midpoint }, 0, 0);
       $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
