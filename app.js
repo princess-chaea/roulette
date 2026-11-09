@@ -202,8 +202,8 @@
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
     $('live-guide').hidden = !camera?.running || mode === 'presence';
-    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '가운데 손잡이를 잡고 한 바퀴 돌려요!';
-    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '화면 가운데 손잡이에 손을 잠시 멈추고, 잡히면 한 방향으로 한 바퀴 돌려 주세요.';
+    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
+    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '노란 손잡이에 손을 잠시 멈추고, 잡히면 한 방향으로 한 바퀴 돌려 주세요.';
   }
   function setProgress(percent, message) {
     $('progress-fill').style.width = percent + '%'; $('progress-number').textContent = percent + '%';
@@ -268,7 +268,7 @@
       const duration = approachMs + settleMs;
       // One timeline includes the whole approach and all settling turns. Neither
       // wheel pauses or restarts when the pointer magnification becomes visible.
-      const keyframes = [{ transform: `rotate(${rotation}deg)`, offset: 0, easing: 'cubic-bezier(.14,.62,.16,1)' },
+      const keyframes = [{ transform: `rotate(${rotation}deg)`, offset: 0, easing: 'cubic-bezier(.12,.2,.3,1)' },
         ...frames.map((angle, index) => ({ transform: `rotate(${angle}deg)`, offset: (approachMs + index * settleMs / (frames.length - 1)) / duration, easing: 'ease-in-out' }))];
       lens.style.transition = 'none'; lens.style.transform = `rotate(${rotation}deg)`;
       lensBox.style.visibility = 'hidden'; lensBox.style.opacity = '0'; lensBox.hidden = false;
@@ -277,14 +277,29 @@
       lensBox.style.top = Math.max(8, stage.offsetTop + stage.querySelector('.wheel-pointer').offsetTop - headingHeight - 2) + 'px';
       lensBox.style.transformOrigin = `50% ${headingHeight + 10}px`;
       const animations = [disc, lens].map(element => element.animate(keyframes, { duration, fill: 'forwards' }));
+      const zoomAt = 2600;
+      const zoom = lensBox.animate([
+        { opacity: 0, transform: 'translateX(-50%) scale(.68)' },
+        { opacity: 1, transform: 'translateX(-50%) scale(1)' }
+      ], { duration: 800, delay: zoomAt, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'both' });
+      const heading = disc.closest('.draw-wheel-card').querySelector('.card-heading').animate(
+        [{ opacity: 1 }, { opacity: 0 }], { duration: 200, delay: zoomAt, fill: 'both' });
+      lensBox.style.visibility = 'visible';
       const startTime = document.timeline.currentTime;
-      animations.forEach(animation => { animation.startTime = startTime; });
-      // Start growing from the pointer while the approaching wheel still moves.
-      await new Promise(resolve => setTimeout(resolve, approachMs - 1100));
-      lensBox.style.visibility = 'visible'; lensBox.classList.add('zoom-visible');
-      $('wheel-message').textContent = singleGift ? '마지막 선물의 주인공을 기다려요…' : '포인터 아래 경계에서, 마지막 두근거림…';
-      const zoom = lensBox.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.72)' }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], { duration: 650, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' });
+      [...animations, zoom, heading].forEach(animation => { animation.startTime = startTime; });
+      // All visual phases share the animation clock; a throttled timer cannot
+      // delay the magnification until after the wheel has slowed to a stop.
+      const host = camera?.animationHost || globalThis;
+      let markerFrame;
+      function markZoom() {
+        if (animations[0].currentTime >= zoomAt) {
+          lensBox.classList.add('zoom-visible');
+          $('wheel-message').textContent = singleGift ? '마지막 선물의 주인공을 기다려요…' : '포인터 아래 경계에서, 마지막 두근거림…';
+        } else markerFrame = host.requestAnimationFrame(markZoom);
+      }
+      markerFrame = host.requestAnimationFrame(markZoom);
       await Promise.all(animations.map(animation => animation.finished));
+      host.cancelAnimationFrame(markerFrame); heading.cancel();
       for (const element of [disc, lens]) element.style.transform = `rotate(${target}deg)`;
       animations.forEach(animation => animation.cancel());
       lensBox.style.opacity = '1'; zoom.cancel();
@@ -397,13 +412,14 @@
   });
   $('open-camera-window').addEventListener('click', () => {
     const opened = CameraWindow.open();
-    $('display-message').textContent = opened ? '카메라 창을 다른 모니터로 옮긴 뒤 전체화면을 눌러 주세요.' : '팝업이 차단됐어요. 주소창에서 이 사이트의 팝업을 허용해 주세요.';
+    $('display-message').textContent = opened ? '' : '팝업이 차단됐어요. 주소창에서 이 사이트의 팝업을 허용해 주세요.';
   });
   window.addEventListener('camera-window-change', event => {
     document.body.classList.toggle('dual-monitor', event.detail.open);
     if (!event.detail.open) $('display-message').textContent = '';
     camera.setAnimationHost(CameraWindow.getWindow() || globalThis);
-    $('open-camera-window').textContent = event.detail.open ? '카메라 창 보기' : '카메라 새 창';
+    const label = event.detail.open ? '카메라 창 보기' : '카메라 새 창';
+    $('open-camera-window').setAttribute('aria-label', label); $('open-camera-window').title = label;
   });
   $('roulette-fullscreen').addEventListener('click', async () => {
     try {
@@ -414,7 +430,8 @@
   document.addEventListener('fullscreenchange', () => {
     const full = !!document.fullscreenElement;
     document.body.classList.toggle('roulette-fullscreen', full);
-    $('roulette-fullscreen').textContent = full ? '전체화면 종료' : '룰렛 전체화면';
+    const label = full ? '전체화면 종료' : '룰렛 전체화면';
+    $('roulette-fullscreen').setAttribute('aria-label', label); $('roulette-fullscreen').title = label;
   });
   $('connect-camera').addEventListener('click', () => {
     if (camera.running || camera.connecting) camera.stop(); else camera.start();

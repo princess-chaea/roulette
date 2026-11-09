@@ -55,7 +55,7 @@
 
   function targetFor(frame, aspect) {
     const radius = Math.min(frame.span * 0.65, 0.185, 0.20 / aspect);
-    return { x: 0.5 - radius, y: 0.5, radius, radiusY: radius * aspect, startX: 0.5, startY: 0.5 };
+    return { x: 0.5, y: 0.5, radius, radiusY: radius * aspect, startX: 0.5 + radius, startY: 0.5 };
   }
 
   function wristAt(points, arm) {

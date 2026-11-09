@@ -80,7 +80,9 @@ function circleSession(aspect = 16 / 9) {
 test('the centered handle requires one complete turn in either direction of the mirrored preview', () => {
   for (const sign of [1, -1]) {
     const { hold, sample, target } = circleSession();
-    assert.equal(target.startX, 0.5);
+    assert.equal(target.x, 0.5);
+    assert.equal(target.y, 0.5);
+    assert.equal(target.startX, 0.5 + target.radius);
     assert.equal(target.startY, 0.5);
     assert.ok(Math.abs(target.radiusY - target.radius * 16 / 9) < 1e-9);
     hold();
