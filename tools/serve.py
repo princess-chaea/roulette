@@ -13,6 +13,10 @@ args = parser.parse_args()
 root = Path(__file__).resolve().parents[1]
 
 class QuietHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self):
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
     def log_message(self, *_args):
         pass
 

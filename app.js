@@ -2,6 +2,8 @@
   'use strict';
   const $ = id => document.getElementById(id);
   const math = globalThis.RouletteMath;
+  const presentation = globalThis.RoulettePresentation;
+  const assetPath = path => path;
   const STORAGE_KEY = 'motion-roulette-prototype-v1';
   const COLORS = ['#f1aa91', '#f5d57a', '#91c7b4', '#c1b6e4', '#a8c8e5', '#e4b5d0'];
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
@@ -36,7 +38,7 @@
   let rotation = 0;
   let completedRound = false;
   let lastResult = null;
-  let armed = false;
+  let currentStage = 'presence';
   let camera;
 
   function save() {
@@ -177,32 +179,33 @@
   function resetRotation() {
     rotation = 0; $('draw-wheel').style.transition = 'none'; $('draw-wheel').style.transform = 'rotate(0deg)';
   }
-  function setMode(mode) {
-    if (busy) return;
-    disarmMotion();
-    state.mode = mode;
-    document.querySelectorAll('[data-mode]').forEach(button => {
-      const selected = button.dataset.mode === mode;
-      button.classList.toggle('selected', selected); button.setAttribute('aria-pressed', String(selected));
+  function showMotionStage(mode) {
+    currentStage = mode;
+    document.querySelectorAll('[data-step]').forEach(step => {
+      const selected = step.dataset.step === mode;
+      step.classList.toggle('selected', selected);
+      step.classList.toggle('complete', step.dataset.step === 'pose' && mode === 'circle');
+      if (selected) step.setAttribute('aria-current', 'step'); else step.removeAttribute('aria-current');
     });
-    $('pose-guide').toggleAttribute('hidden', mode !== 'pose'); $('circle-guide').toggleAttribute('hidden', mode !== 'circle');
-    $('live-guide-image').src = `assets/art/${mode === 'pose' ? 'pose' : 'circle'}-guide.png`;
-    camera?.setMode(mode);
-    $('gesture-title').textContent = mode === 'pose' ? '양손을 머리 위로 올려 주세요!' : '손으로 큰 원을 그려 주세요!';
-    $('gesture-description').textContent = mode === 'pose' ? '양손을 높이 들고 1초 동안 유지해요.' : '화면 오른쪽 시작점에서 같은 손으로 반 바퀴 돌려요.';
-    setProgress(0); updateControls(); save();
+    $('pose-guide').toggleAttribute('hidden', mode === 'circle'); $('circle-guide').toggleAttribute('hidden', mode !== 'circle');
+    const starter = presentation.starterForRound(state.history.length);
+    const guideImage = assetPath('assets/art/' + starter.image);
+    $('pose-guide').src = guideImage;
+    $('pose-guide').alt = starter.short + ' 동작 안내';
+    $('pose-guide').dataset.poseKind = starter.kind;
+    $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
+    $('live-guide').hidden = !camera?.running || mode === 'presence';
+    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '좋아요! 이제 손으로 룰렛을 돌려요!';
+    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '화면 오른쪽 노란 시작점에서 같은 손으로 반 바퀴 돌려요.';
   }
   function setProgress(percent, message) {
     $('progress-fill').style.width = percent + '%'; $('progress-number').textContent = percent + '%';
     $('motion-progress').setAttribute('aria-valuenow', percent);
-    $('camera-feedback').textContent = message || (percent === 100 ? '성공! 행운이 출발해요' : '카메라 연결 후 동작 인식을 시작해 주세요.');
+    $('camera-feedback').textContent = message || (percent === 100 ? '성공! 행운이 출발해요' : '카메라 연결 후 화면 가운데에 서 주세요.');
   }
   function updateControls() {
     const disabled = busy || completedRound || !!getError();
     $('manual-spin').disabled = disabled;
-    $('arm-motion').disabled = disabled || !camera?.running;
-    $('arm-button-label').textContent = armed ? '동작 인식 중지' : '동작 인식 시작';
-    document.querySelectorAll('[data-mode]').forEach(button => button.disabled = busy);
     $('show-history').disabled = busy;
     $('draw-tab').setAttribute('aria-disabled', String(busy));
     $('setup-tab').setAttribute('aria-disabled', String(busy));
@@ -218,19 +221,14 @@
     if (!canStart()) return;
     disarmMotion(); busy = true; updateControls(); beginRotation(direction);
   }
-  function beginRotation(direction) {
+  async function beginRotation(direction) {
     const random = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
     const selected = math.pick(state.prizes, random);
     if (!selected) { busy = false; updateControls(); return; }
-    const margin = Math.min(8, (selected.end - selected.start) * .25);
-    const landingAngle = direction === 'counterclockwise' ? selected.start + margin : selected.end - margin;
+    const { target, boundary, landingAngle, frames } = math.finishPlan(state.prizes, selected, rotation, direction);
     state.pending = { id: crypto.randomUUID(), prizeId: selected.id, rank: selected.rank, prize: selected.name, name: `${state.history.length + 1}회차`, time: new Date().toISOString(), landingAngle, direction };
     save();
-    const target = math.rotationFor({ ...selected, midpoint: landingAngle }, rotation, 5, direction);
-    const sign = direction === 'counterclockwise' ? -1 : 1;
-    const fastDuration = reducedMotion.matches ? 120 : 3200;
-    const slowDuration = reducedMotion.matches ? 0 : 3000;
-    const beforeFinish = target - sign * (margin + 14);
+    const short = reducedMotion.matches;
     const lens = $('lens-disc');
     const singleGift = math.available(state.prizes).length === 1;
     $('finish-lens').querySelector('.lens-heading strong').textContent = singleGift ? '마지막 남은 선물이에요' : '마지막 한 칸, 천천히 확인해요';
@@ -238,31 +236,27 @@
     $('finish-lens').hidden = true;
     $('lens-status').textContent = '포인터가 완전히 멈춘 뒤 결과를 발표해요.';
     $('wheel-message').textContent = '당신의 행운을 찾고 있어요…';
-    for (const disc of [$('draw-wheel'), lens]) {
-      disc.style.transition = 'none'; disc.style.transform = `rotate(${rotation}deg)`;
-      disc.getBoundingClientRect();
-      disc.style.transition = `transform ${fastDuration}ms cubic-bezier(.14,.55,.35,1)`;
-      disc.style.transform = `rotate(${reducedMotion.matches ? target : beforeFinish}deg)`;
-    }
+    const disc = $('draw-wheel');
+    disc.style.transition = 'none';
+    const spinAnimation = disc.animate([{ transform: `rotate(${rotation}deg)` }, { transform: `rotate(${short ? target : boundary}deg)` }], { duration: short ? 120 : 4100, easing: 'cubic-bezier(.14,.62,.16,1)', fill: 'forwards' });
+    await spinAnimation.finished;
+    disc.style.transform = `rotate(${short ? target : boundary}deg)`; spinAnimation.cancel();
     rotation = target;
-    setTimeout(() => {
-      if (slowDuration) {
-        lens.style.transition = 'none'; lens.style.transform = `rotate(${beforeFinish}deg)`;
-        $('finish-lens').hidden = false;
-        lens.getBoundingClientRect();
-        $('wheel-message').textContent = singleGift ? '마지막 선물의 주인공을 기다려요…' : '마지막 경계선, 확대해서 확인해요…';
-        for (const disc of [$('draw-wheel'), lens]) {
-          disc.style.transition = `transform ${slowDuration}ms cubic-bezier(.22,.5,.2,1)`;
-          disc.style.transform = `rotate(${target}deg)`;
-        }
-      }
-      setTimeout(() => {
-        $('lens-status').textContent = '정지 완료! 포인터가 가리키는 경품을 확인했어요.';
-        finalizeRound();
-        busy = true; updateControls();
-        setTimeout(() => { busy = false; updateControls(); $('finish-lens').hidden = true; showResult(); }, reducedMotion.matches ? 0 : 650);
-      }, slowDuration + 100);
-    }, fastDuration + 40);
+    if (!short) {
+      lens.style.transition = 'none'; lens.style.transform = `rotate(${boundary}deg)`;
+      $('finish-lens').hidden = false;
+      const stage = disc.closest('.wheel-stage');
+      $('finish-lens').style.top = Math.max(8, stage.offsetTop + stage.querySelector('.wheel-pointer').offsetTop - $('finish-lens').querySelector('.lens-heading').offsetHeight - 2) + 'px';
+      $('wheel-message').textContent = singleGift ? '마지막 선물의 주인공을 기다려요…' : '포인터 아래 경계에서, 마지막 두근거림…';
+      const keyframes = frames.map((angle, index) => ({ transform: `rotate(${angle}deg)`, offset: index / (frames.length - 1), easing: 'ease-in-out' }));
+      const settling = [disc, lens].map(element => element.animate(keyframes, { duration: singleGift ? 900 : 2400, fill: 'forwards' }));
+      await Promise.all(settling.map(animation => animation.finished));
+      for (const element of [disc, lens]) element.style.transform = `rotate(${target}deg)`;
+      settling.forEach(animation => animation.cancel());
+    }
+    $('lens-status').textContent = '정지 완료! 포인터가 가리키는 경품을 확인했어요.';
+    await new Promise(resolve => setTimeout(resolve, short ? 0 : 450));
+    finalizeRound(); $('finish-lens').hidden = true; showResult();
   }
   function finalizeRound() {
     const result = state.pending;
@@ -281,16 +275,17 @@
     if (!lastResult) return;
     $('result-rank').textContent = lastResult.rank + '등 당첨!';
     $('result-prize').textContent = lastResult.prize;
-    $('result-person').textContent = lastResult.name + '의 행운을 축하해요!';
+    $('result-dialog').querySelector('.result-art').src = assetPath(presentation.rankImage(lastResult.rank));
+    $('result-dialog').querySelector('.result-art').alt = `${lastResult.rank}등 당첨을 축하하는 새싹 캐릭터`;
     if (!$('result-dialog').open) $('result-dialog').showModal();
   }
   function nextParticipant() {
     disarmMotion(); $('finish-lens').hidden = true;
     completedRound = false;
-    renderEditor(); changed(); setProgress(0);
+    renderEditor(); changed(); resetAutoMotion(); setProgress(0);
     $('wheel-message').textContent = math.total(state.prizes) ? '두근두근, 당신의 행운을 기다리는 중' : '모든 선물의 주인공을 찾았어요. 감사합니다!';
     $('draw-error').textContent = math.total(state.prizes) ? '' : '준비한 상품이 모두 소진됐어요. 설계 화면에서 추가할 수 있어요.';
-    if (math.total(state.prizes)) $('arm-motion').focus();
+    if (math.total(state.prizes)) $('manual-spin').focus();
   }
   function route() {
     const draw = location.hash === '#draw';
@@ -305,7 +300,7 @@
     if (!draw && completedRound) nextParticipant();
   }
   function showHistory() {
-    disarmMotion(); updateControls(); setProgress(0, '기록을 닫은 뒤 동작 인식을 다시 시작해 주세요.');
+    disarmMotion(); updateControls(); setProgress(0, '기록을 닫으면 준비 위치를 다시 확인해요.');
     const list = $('history-list'); list.replaceChildren();
     if (!state.history.length) list.append(el('p', 'empty-history', '아직 당첨 기록이 없어요.\n첫 번째 행운의 주인공을 만나 보세요!'));
     state.history.slice().reverse().forEach((entry, i) => {
@@ -315,25 +310,30 @@
     });
     $('history-dialog').showModal();
   }
-  function disarmMotion() { armed = false; camera?.setActive(false); }
+  function disarmMotion() { camera?.setActive(false); }
+  function resetAutoMotion() {
+    showMotionStage('presence');
+    camera?.setPoseKind(presentation.starterForRound(state.history.length).kind);
+    camera?.setActive(!!camera.running && !busy && !completedRound && !getError());
+  }
   function cameraState({ phase, message }) {
     const ready = phase === 'ready', connecting = phase === 'connecting';
-    if (!ready) armed = false;
     $('camera-status').textContent = ready ? '카메라 ON' : connecting ? '준비 중' : '연결 안 됨';
     $('camera-status').classList.toggle('connected', ready);
     $('camera-button-label').textContent = ready ? '카메라 끄기' : connecting ? '연결 취소' : '카메라 연결';
     $('camera-label-text').textContent = ready ? 'LIVE · 이 기기에서 분석 중' : connecting ? '카메라 준비 중' : '카메라 대기 중';
     $('camera-preview').classList.toggle('is-live', ready);
     $('camera-video').hidden = !ready; $('tracking-overlay').hidden = !ready;
-    $('camera-empty').hidden = ready; $('live-guide').hidden = !ready;
+    $('camera-empty').hidden = ready;
     $('camera-error').textContent = phase === 'error' ? message : '';
-    setProgress(0, message); updateControls();
+    resetAutoMotion(); setProgress(0, ready ? '화면 가운데에 2초 동안 서 주세요.' : message); updateControls();
   }
   camera = new MotionCamera({
     video: $('camera-video'), canvas: $('tracking-overlay'), onState: cameraState,
-    canRecognize: () => armed && !busy && !completedRound && !document.hidden && !$('history-dialog').open && !$('result-dialog').open && location.hash === '#draw' && !$('draw-page').hidden && !getError(),
+    canRecognize: () => !busy && !completedRound && !document.hidden && !$('history-dialog').open && !$('result-dialog').open && location.hash === '#draw' && !$('draw-page').hidden && !getError(),
     onResult: result => {
-      if (!armed || busy || completedRound) return;
+      if (busy || completedRound) return;
+      if (result.mode && result.mode !== currentStage) showMotionStage(result.mode);
       setProgress(result.progress, result.message);
       if (result.matched) spin(result.direction || 'clockwise');
     }
@@ -341,32 +341,27 @@
   $('connect-camera').addEventListener('click', () => {
     if (camera.running || camera.connecting) camera.stop(); else camera.start();
   });
-  $('arm-motion').addEventListener('click', () => {
-    if (armed) { disarmMotion(); setProgress(0, '인식을 멈췄어요. 준비되면 다시 시작해 주세요.'); }
-    else if (canStart() && camera.running) { armed = true; camera.setActive(true); setProgress(0, '화면 가운데 서서 안내 동작을 취해 주세요.'); }
-    updateControls();
-  });
   $('add-prize').addEventListener('click', () => {
     if (state.prizes.length >= 12) return;
     state.prizes.push({ id: crypto.randomUUID(), name: '새로운 선물', quantity: 1, rank: state.prizes.length + 1 });
     renderEditor(); changed(); $('prize-rows').lastElementChild.querySelector('input').focus();
   });
   $('event-title').addEventListener('input', event => { state.title = event.target.value; save(); });
-  document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => setMode(button.dataset.mode)));
   $('go-draw').addEventListener('click', () => { if (!getError()) location.hash = 'draw'; });
   $('manual-spin').addEventListener('click', () => spin());
   $('show-history').addEventListener('click', showHistory);
   $('close-history').addEventListener('click', () => $('history-dialog').close());
+  $('history-dialog').addEventListener('close', resetAutoMotion);
   $('result-dialog').addEventListener('close', nextParticipant);
   $('reset-sample').addEventListener('click', () => {
     if (!confirm('설정과 당첨 기록을 지우고 예시로 다시 채울까요?')) return;
-    state = initialState(); renderEditor(); setMode(state.mode); changed();
+    state = initialState(); renderEditor(); resetAutoMotion(); changed();
   });
   window.addEventListener('hashchange', route);
   document.addEventListener('visibilitychange', () => { if (document.hidden && (camera.running || camera.connecting)) camera.stop('다른 화면으로 이동해 카메라를 껐어요.'); });
   window.addEventListener('pagehide', () => camera.dispose());
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
-  renderEditor(); changed(); setMode(state.mode); route(); updateSaveStatus();
+  renderEditor(); changed(); showMotionStage('presence'); route(); updateSaveStatus();
   if (state.pending) {
     const recovered = math.segments(state.prizes).find(p => p.id === state.pending.prizeId);
     if (recovered) {

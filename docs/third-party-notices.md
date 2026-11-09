@@ -26,3 +26,5 @@
 ## 생성 이미지
 
 내장 ImageGen으로 새로 생성한 동작 안내 2종과 룰렛 로고 1종은 `assets/art/`에 저장했다. 프롬프트와 생성 기록은 [image-prompts.md](image-prompts.md)에 있다.
+
+추가 생성 자산: 시작 자세 3종과 등수별 표정 10종. 프롬프트는 starter-art-prompts.md, starter-heart-art-prompt.md, rank-art-prompts-01-05.md, rank-art-prompts-06-10.md에 기록했다. 연구회 로고는 원본을 보존하고 화면의 알파 필터로 밝은 배경만 제거한다.

@@ -15,13 +15,14 @@
   class MotionCamera {
     constructor({ video, canvas, onState, onResult, canRecognize }) {
       Object.assign(this, { video, canvas, onState, onResult, canRecognize });
-      this.detector = new MotionGestures.GestureDetector();
+      this.detector = new MotionGestures.MotionFlow();
       this.stream = null; this.engine = null; this.phase = 'stopped';
       this.active = false; this.sequence = 0; this.raf = null;
       this.lastTime = -Infinity; this.lastVideoTime = -1;
     }
     get running() { return this.phase === 'ready'; }
     get connecting() { return this.phase === 'connecting'; }
+    setPoseKind(kind) { this.detector.setPoseKind(kind); this.clearOverlay(); }
     state(phase, message) { this.phase = phase; this.onState({ phase, message }); }
     async start() {
       if (this.running || this.connecting) return;
@@ -51,7 +52,7 @@
         if (sequence !== this.sequence) return;
         this.engine = engine;
         this.lastVideoTime = -1; this.lastTime = -Infinity;
-        this.state('ready', '연결됐어요! 동작 인식을 시작해 주세요.');
+        this.state('ready', '연결됐어요! 화면 가운데에서 2초 동안 기다려 주세요.');
         this.loop();
       } catch (error) {
         if (sequence !== this.sequence) return;
@@ -68,7 +69,6 @@
         outputSegmentationMasks: false
       });
     }
-    setMode(mode) { this.detector.setMode(mode); this.clearOverlay(); }
     setActive(active) { this.active = active; this.detector.reset(); if (!active) this.clearOverlay(); }
     loop() {
       if (!this.running) return;
@@ -97,6 +97,10 @@
       const ctx = this.canvas.getContext('2d'); ctx.clearRect(0, 0, width, height);
       const valid = p => p && (p.visibility ?? 1) >= .55 && (p.presence ?? 1) >= .55;
       const xy = p => [(1 - p.x) * width, p.y * height];
+      if (result.mode === 'presence') {
+        ctx.strokeStyle = '#d5f477bb'; ctx.lineWidth = Math.max(2, width / 180); ctx.setLineDash([width / 40, width / 50]);
+        ctx.strokeRect(width * .25, height * .07, width * .5, height * .73); ctx.setLineDash([]);
+      }
       if (points) {
         ctx.strokeStyle = '#d5f477'; ctx.fillStyle = '#d5f477'; ctx.lineWidth = Math.max(2, width / 160);
         ctx.shadowColor = '#173d35'; ctx.shadowBlur = 3;

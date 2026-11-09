@@ -23,7 +23,22 @@
     if (direction === 'counterclockwise') return current - laps * 360 - (normalized - destination + 360) % 360;
     return current + laps * 360 + (destination - normalized + 360) % 360;
   }
-  const api = { available, total, segments, pick, rotationFor };
+  function finishPlan(prizes, selected, current = 0, direction = 'clockwise') {
+    const options = segments(prizes);
+    const index = options.findIndex(p => p.id === selected.id);
+    if (index < 0) throw new RangeError('Winning segment is unavailable.');
+    const sign = direction === 'counterclockwise' ? -1 : 1;
+    const neighbor = options[(index + (sign === 1 ? 1 : options.length - 1)) % options.length];
+    const width = selected.end - selected.start;
+    const amplitude = options.length > 1 ? Math.min(5, width * .28, (neighbor.end - neighbor.start) * .28) : 0;
+    const margin = amplitude ? Math.min(1.8, amplitude * .35) : Math.min(8, width / 4);
+    const landingAngle = sign === 1 ? selected.end - margin : selected.start + margin;
+    const target = rotationFor({ ...selected, midpoint: landingAngle }, current, 5, direction);
+    const boundary = amplitude ? target - sign * margin : target;
+    const offsets = amplitude ? [0, amplitude, -amplitude * .65, amplitude * .42, -amplitude * .22, margin] : [0, 0];
+    return { landingAngle, target, boundary, amplitude, frames: offsets.map(delta => boundary + sign * delta) };
+  }
+  const api = { available, total, segments, pick, rotationFor, finishPlan };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.RouletteMath = api;
 })();

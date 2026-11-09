@@ -39,19 +39,20 @@ function rig(getUserMedia, createEngine) {
     readyState: 2, currentTime: 0, videoWidth: 640, videoHeight: 480, srcObject: null, paused: true,
     async play() { this.paused = false; }, pause() { this.paused = true; }
   };
+  class FakeDetector {
+    reset() {} setMode() {} update() { return { mode: 'presence', matched: false, progress: 0 }; }
+  }
   const sandbox = {
     URL, location: { protocol: 'http:' }, document: { baseURI: 'http://localhost/' }, isSecureContext: true,
     navigator: { mediaDevices: { getUserMedia } }, performance: { now: () => now },
     requestAnimationFrame(callback) { frames.set(++nextId, callback); return nextId; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    MotionGestures: { GestureDetector: class {
-      reset() {} setMode() {} update() { return { matched: false, progress: 0 }; }
-    } }
+    MotionGestures: { GestureDetector: FakeDetector, MotionFlow: FakeDetector }
   };
   runInNewContext(source, sandbox, { filename: 'motion-camera.js' });
   const phases = [];
   const camera = new sandbox.MotionCamera({
-    video, canvas: { getContext: () => ({ clearRect() {} }) },
+    video, canvas: { getContext: () => ({ clearRect() {}, setLineDash() {}, strokeRect() {} }) },
     onState: state => phases.push(state.phase), onResult() {}, canRecognize: () => true
   });
   camera.createEngine = createEngine;
