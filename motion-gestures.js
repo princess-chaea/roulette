@@ -12,8 +12,15 @@
   };
   const DEFAULTS = { confidence: 0.55, presenceHoldMs: 2000, poseHoldMs: 1000, startHoldMs: 250, maxFrameGapMs: 350 };
   const status = (message, progress = 0, extra = {}) => ({ message, progress, matched: false, ...extra });
+  // Mirrored, normalized hand coordinates; idle handles sit at the guide start.
+  // On body loss no guide exists, so x/y are null. Positive angleDeg is clockwise.
+  const idleGrip = target => ({
+    grip: { x: target?.startX ?? null, y: target?.startY ?? null, held: false, progress: 0 }, angleDeg: 0
+  });
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const wrapAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
+  const TURN_ANGLE = Math.PI / 3;
+  const TURN_HINT = '손잡이를 잡고 한쪽으로 쭉 돌려 주세요.';
 
   function visible(point, confidence) {
     return point && Number.isFinite(point.x) && Number.isFinite(point.y) &&
@@ -37,7 +44,7 @@
       const measured = (points[23].y + points[24].y) / 2 - shoulderY;
       if (measured > shoulderScale * 0.35 && measured < shoulderScale * 2.5) height = measured;
     }
-    return { x, y: shoulderY + height * 0.20, span, shoulderY, height };
+    return { x, y: shoulderY + height * 0.20, span, shoulderScale, shoulderY, height };
   }
 
   function discontinuous(a, b, aspect) {
@@ -51,8 +58,8 @@
     return { x: frame.x, y: frame.y, radius, radiusY: radius * aspect, startX: frame.x + radius, startY: frame.y };
   }
 
-  function wristAt(points, arm, confidence) {
-    if (!visible(points[arm.elbow], confidence) || !visible(points[arm.wrist], confidence)) return null;
+  function wristAt(points, arm) {
+    if (!visible(points?.[arm.wrist], 0.45)) return null;
     return { x: 1 - points[arm.wrist].x, y: points[arm.wrist].y };
   }
 
@@ -61,11 +68,11 @@
       const extended = [LEFT, RIGHT].every(arm => {
         const shoulder = points[arm.shoulder], elbow = points[arm.elbow], wrist = points[arm.wrist];
         const outward = Math.sign(shoulder.x - (1 - frame.x));
-        return (elbow.x - shoulder.x) * outward >= frame.span * 0.20 &&
-          (wrist.x - shoulder.x) * outward >= frame.span * 0.60 &&
-          (wrist.x - elbow.x) * outward >= frame.span * 0.15 &&
-          Math.abs(elbow.y - shoulder.y) <= frame.height * 0.25 &&
-          Math.abs(wrist.y - shoulder.y) <= frame.height * 0.30;
+        return (elbow.x - shoulder.x) * outward >= frame.span * 0.15 &&
+          (wrist.x - shoulder.x) * outward >= frame.span * 0.45 &&
+          (wrist.x - elbow.x) * outward >= frame.span * 0.10 &&
+          Math.abs(elbow.y - shoulder.y) <= frame.shoulderScale * 0.45 &&
+          Math.abs(wrist.y - shoulder.y) <= frame.shoulderScale * 0.60;
       });
       return extended ? 'both' : null;
     }
@@ -104,9 +111,10 @@
       this.heldSide = null;
       this.circle = null;
       this.previousBody = null;
+      this.lastVisibleBody = null;
       this.lastTime = null;
       this.done = false;
-      this.lastResult = status('카메라에 상체를 보여 주세요.');
+      this.lastResult = status('카메라에 상체를 보여 주세요.', 0, idleGrip());
     }
 
     setMode(mode) {
@@ -121,21 +129,37 @@
       this.reset();
     }
 
+    cachedFrame(points, time, aspect) {
+      const arc = this.circle, last = this.lastVisibleBody;
+      if (arc?.angle == null || !last || time < last.time || time - last.time > 500) return null;
+      const side = arc.arm.shoulder, other = side === LEFT.shoulder ? RIGHT.shoulder : LEFT.shoulder;
+      if (visible(points?.[other], this.tuning.confidence) || !wristAt(points, arc.arm)) return null;
+      // Only bridge a hidden opposite shoulder. The nose and active shoulder must
+      // still describe the same participant in the same place as the measured frame.
+      for (const i of [0, side]) {
+        if (!visible(points?.[i], this.tuning.confidence) ||
+            Math.hypot(points[i].x - last.points[i].x, (points[i].y - last.points[i].y) / aspect) > last.frame.span * 0.45) return null;
+      }
+      return last.frame;
+    }
+
     update(landmarks, timestampMs, aspectRatio = 1) {
       if (this.done) return { ...this.lastResult, matched: false };
       if (!Number.isFinite(timestampMs) || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
         this.reset();
         return this.lastResult;
       }
-      const frame = bodyFrame(landmarks, aspectRatio, this.tuning.confidence);
+      const measured = bodyFrame(landmarks, aspectRatio, this.tuning.confidence);
+      const frame = measured ?? this.cachedFrame(landmarks, timestampMs, aspectRatio);
       if (!frame) {
         this.reset();
-        return status('얼굴과 양쪽 어깨가 화면에 보이도록 해 주세요.');
+        return status('얼굴과 양쪽 어깨가 화면에 보이도록 해 주세요.', 0, idleGrip());
       }
       if (timestampMs === this.lastTime) return { ...this.lastResult, matched: false };
       const gap = this.lastTime === null ? 0 : timestampMs - this.lastTime;
       if (gap < 0 || gap > this.tuning.maxFrameGapMs || discontinuous(this.previousBody, frame, aspectRatio)) this.reset();
       this.previousBody = frame;
+      if (measured) this.lastVisibleBody = { frame, time: timestampMs, points: landmarks };
       this.lastTime = timestampMs;
       this.lastResult = this.mode === 'pose'
         ? this.followPose(landmarks, frame, timestampMs)
@@ -162,7 +186,8 @@
       const target = this.circle?.target ?? targetFor(frame, aspect);
       const restart = message => {
         this.circle = null;
-        return status(message, 0, { target: targetFor(frame, aspect) });
+        const next = targetFor(frame, aspect);
+        return status(message, 0, { target: next, ...idleGrip(next) });
       };
       if (target.x - target.radius < 0 || target.x + target.radius > 1 ||
           target.y - target.radiusY < 0 || target.y + target.radiusY > 1) {
@@ -171,51 +196,62 @@
       if (this.circle && discontinuous(this.circle.body, frame, aspect)) return restart('몸을 가운데 두고 다시 준비해 주세요.');
       const startDistance = wrist => Math.hypot(wrist.x - target.startX, (wrist.y - target.startY) / aspect);
       if (!this.circle) {
-        const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: wristAt(points, arm, this.tuning.confidence) }))
+        const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: wristAt(points, arm) }))
           .filter(c => c.wrist).sort((a, b) => startDistance(a.wrist) - startDistance(b.wrist));
         if (!candidates.length || startDistance(candidates[0].wrist) > target.radius * 0.34) {
-          return status('한 손을 오른쪽 시작점에 올려 주세요.', 0, { target });
+          return status('한 손을 오른쪽 시작점에 올려 주세요.', 0, { target, ...idleGrip(target) });
         }
         this.circle = { arm: candidates[0].arm, body: frame, target, startTime: time, angle: null,
-          net: 0, direction: 0, furthest: 0, samples: 0, movingSince: null, lastMotionTime: time };
+          net: 0, direction: 0, furthest: 0, samples: 0, tangent: 0, movingSince: null, lastMotionTime: time };
       }
       const arc = this.circle;
-      const wrist = wristAt(points, arc.arm, this.tuning.confidence);
+      const wrist = wristAt(points, arc.arm);
       if (!wrist) return restart('처음 올린 손이 화면에 보이도록 해 주세요.');
       const dx = wrist.x - target.x, dy = (wrist.y - target.y) / aspect;
       const angle = Math.atan2(dy, dx);
       if (arc.angle === null) {
         if (startDistance(wrist) > target.radius * 0.34) return restart('시작점에서 손을 잠시 멈춰 주세요.');
         const held = time - arc.startTime;
-        if (held >= this.tuning.startHoldMs) { arc.angle = angle; arc.lastMotionTime = time; }
-        return status(arc.angle === null ? '시작점에서 손을 잠시 멈춰 주세요.' : '같은 손으로 원을 따라 반 바퀴 돌려 주세요.',
-          Math.min(12, Math.floor(12 * held / this.tuning.startHoldMs)), { target });
+        if (held >= this.tuning.startHoldMs) { arc.angle = angle; arc.origin = wrist; arc.lastMotionTime = time; }
+        const progress = arc.angle === null ? held / this.tuning.startHoldMs : 1;
+        return status(arc.angle === null ? '시작점에서 손을 잠시 멈춰 주세요.' : TURN_HINT,
+          Math.floor(12 * progress), { target, grip: { ...wrist, held: arc.angle !== null, progress }, angleDeg: 0 });
       }
       const radiusRatio = Math.hypot(dx, dy) / target.radius;
-      if (radiusRatio < 0.65 || radiusRatio > 1.40) return restart('안내 원을 따라 다시 시작해 주세요.');
+      if (radiusRatio > 2.3) return restart('손잡이를 다시 잡아 주세요.');
+      const feedback = { target, grip: { ...wrist, held: true, progress: 1 }, angleDeg: arc.net * 180 / Math.PI };
+      if (radiusRatio < 0.25 || arc.inCenter) {
+        // No rotation is measured inside the hub or across its opposite sides.
+        arc.inCenter = radiusRatio < 0.25;
+        arc.angle = angle;
+        arc.lastMotionTime = time;
+        return status(TURN_HINT, Math.floor(clamp(12 + 88 * Math.abs(arc.net) / TURN_ANGLE, 12, 99)), feedback);
+      }
       const step = wrapAngle(angle - arc.angle);
       const maxStep = Math.min(1.10, 0.22 + (time - arc.lastMotionTime) * 0.014);
       if (Math.abs(step) > maxStep) return restart('손을 조금 더 천천히 움직여 주세요.');
+      if (Math.abs(step) >= 0.012 && arc.movingSince === null) arc.movingSince = arc.lastMotionTime;
       arc.angle = angle;
       arc.lastMotionTime = time;
       arc.net += step;
+      arc.tangent += step * radiusRatio;
       if (Math.abs(step) >= 0.012) arc.samples++;
       if (!arc.direction && Math.abs(arc.net) >= 0.12) {
         arc.direction = Math.sign(arc.net);
-        arc.movingSince = time;
       }
       const sweep = arc.net * arc.direction;
       arc.furthest = Math.max(arc.furthest, sweep);
       if (arc.furthest - sweep > 0.34) return restart('한 방향으로 계속 돌려 주세요.');
       const duration = arc.movingSince === null ? 0 : time - arc.movingSince;
       if (duration > 4500) return restart('오른쪽 시작점에서 다시 돌려 주세요.');
-      const feedback = { target };
+      feedback.angleDeg = arc.net * 180 / Math.PI;
       if (arc.direction) feedback.direction = arc.direction > 0 ? 'clockwise' : 'counterclockwise';
-      if (sweep >= Math.PI - 0.015) {
-        if (arc.samples < 6 || duration < 250) return restart('손을 조금 더 천천히 움직여 주세요.');
+      const displacement = Math.hypot(wrist.x - arc.origin.x, (wrist.y - arc.origin.y) / aspect) / target.radius;
+      if (sweep >= TURN_ANGLE - 1e-6 && arc.samples >= 3 && duration >= 200 &&
+          displacement >= 0.45 && arc.tangent * arc.direction >= 0.45) {
         return status('성공! 룰렛이 돌아갑니다.', 100, { ...feedback, matched: true, speed: sweep * 1000 / duration });
       }
-      return status('같은 손으로 원을 따라 반 바퀴 돌려 주세요.', Math.floor(clamp(12 + 88 * sweep / Math.PI, 12, 99)), feedback);
+      return status(TURN_HINT, Math.floor(clamp(12 + 88 * sweep / TURN_ANGLE, 12, 99)), feedback);
     }
   }
 
@@ -240,14 +276,14 @@
       this.lastTime = null;
       this.presenceStart = null;
       this.done = false;
-      this.lastResult = status('얼굴과 양쪽 어깨를 화면 가운데에 맞춰 주세요.', 0, { mode: 'presence' });
+      this.lastResult = status('얼굴과 양쪽 어깨를 화면 가운데에 맞춰 주세요.', 0, { mode: 'presence', ...idleGrip() });
       this.detector.setMode('pose');
     }
 
     update(points, time, aspect = 1) {
       if (this.done) return { ...this.lastResult, matched: false };
       const frame = Number.isFinite(time) && Number.isFinite(aspect) && aspect > 0
-        ? bodyFrame(points, aspect, this.tuning.confidence) : null;
+        ? bodyFrame(points, aspect, this.tuning.confidence) ?? this.detector.cachedFrame(points, time, aspect) : null;
       if (!frame || frame.x < 0.25 || frame.x > 0.75 || frame.span < 0.08 || frame.span > 0.65 ||
           points[0].y < 0.05 || points[0].y > 0.60) {
         this.reset();
@@ -268,7 +304,7 @@
         const held = time - this.presenceStart;
         if (held < this.tuning.presenceHoldMs) {
           const progress = Math.floor(100 * held / this.tuning.presenceHoldMs);
-          this.lastResult = status('화면 가운데에서 2초 동안 기다려 주세요.', progress, { mode: this.mode });
+          this.lastResult = status('화면 가운데에서 2초 동안 기다려 주세요.', progress, { mode: this.mode, ...idleGrip() });
           return this.lastResult;
         }
         this.mode = 'pose';

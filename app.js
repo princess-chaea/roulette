@@ -39,7 +39,13 @@
   let completedRound = false;
   let lastResult = null;
   let currentStage = 'presence';
+  let gripRotationBase = null;
   let camera;
+  const firstPrizeMode = new FirstPrizeMode();
+  function renderOperatorMode() {
+    $('organization-mode').classList.toggle('first-prize-armed', firstPrizeMode.armed);
+    $('organization-mode').setAttribute('aria-pressed', String(firstPrizeMode.armed));
+  }
 
   function save() {
     if (!validState(state)) {
@@ -177,6 +183,7 @@
     save();
   }
   function resetRotation() {
+    gripRotationBase = null;
     rotation = 0; $('draw-wheel').style.transition = 'none'; $('draw-wheel').style.transform = 'rotate(0deg)';
   }
   function showMotionStage(mode) {
@@ -195,8 +202,8 @@
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
     $('live-guide').hidden = !camera?.running || mode === 'presence';
-    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '좋아요! 이제 손으로 룰렛을 돌려요!';
-    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '화면 오른쪽 노란 시작점에서 같은 손으로 반 바퀴 돌려요.';
+    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '노란 손잡이를 잡고 룰렛을 돌려요!';
+    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '손잡이에 손을 잠시 멈추고, 잡히면 한쪽으로 넓게 끌어 돌려 주세요.';
   }
   function setProgress(percent, message) {
     $('progress-fill').style.width = percent + '%'; $('progress-number').textContent = percent + '%';
@@ -219,11 +226,22 @@
   }
   function spin(direction = 'clockwise') {
     if (!canStart()) return;
+    if (gripRotationBase !== null) {
+      const matrix = new DOMMatrix(getComputedStyle($('draw-wheel')).transform);
+      const visualAngle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+      const difference = (visualAngle - rotation) * Math.PI / 180;
+      rotation += Math.atan2(Math.sin(difference), Math.cos(difference)) * 180 / Math.PI;
+      $('draw-wheel').style.transition = 'none';
+      $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
+    }
+    gripRotationBase = null; // Continue smoothly from the participant's hand angle.
+    if (matchMedia('(max-width: 800px)').matches) $('draw-wheel').closest('.wheel-stage').scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'center' });
     disarmMotion(); busy = true; updateControls(); beginRotation(direction);
   }
   async function beginRotation(direction) {
     const random = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
-    const selected = math.pick(state.prizes, random);
+    const selected = firstPrizeMode.take(math.segments(state.prizes)) || math.pick(state.prizes, random);
+    renderOperatorMode();
     if (!selected) { busy = false; updateControls(); return; }
     const { target, boundary, landingAngle, frames } = math.finishPlan(state.prizes, selected, rotation, direction);
     state.pending = { id: crypto.randomUUID(), prizeId: selected.id, rank: selected.rank, prize: selected.name, name: `${state.history.length + 1}회차`, time: new Date().toISOString(), landingAngle, direction };
@@ -238,25 +256,43 @@
     $('wheel-message').textContent = '당신의 행운을 찾고 있어요…';
     const disc = $('draw-wheel');
     disc.style.transition = 'none';
-    const spinAnimation = disc.animate([{ transform: `rotate(${rotation}deg)` }, { transform: `rotate(${short ? target : boundary}deg)` }], { duration: short ? 120 : 4100, easing: 'cubic-bezier(.14,.62,.16,1)', fill: 'forwards' });
-    await spinAnimation.finished;
-    disc.style.transform = `rotate(${short ? target : boundary}deg)`; spinAnimation.cancel();
-    rotation = target;
-    if (!short) {
-      lens.style.transition = 'none'; lens.style.transform = `rotate(${boundary}deg)`;
-      $('finish-lens').hidden = false;
+    const lensBox = $('finish-lens');
+    lensBox.classList.remove('zoom-visible');
+    if (short) {
+      const animation = disc.animate([{ transform: `rotate(${rotation}deg)` }, { transform: `rotate(${target}deg)` }], { duration: 120, fill: 'forwards' });
+      await animation.finished;
+      disc.style.transform = `rotate(${target}deg)`; animation.cancel();
+    } else {
+      const approachMs = 4100;
+      const settleMs = singleGift ? 900 : 2400;
+      const duration = approachMs + settleMs;
+      // One timeline includes the whole approach and all settling turns. Neither
+      // wheel pauses or restarts when the pointer magnification becomes visible.
+      const keyframes = [{ transform: `rotate(${rotation}deg)`, offset: 0, easing: 'cubic-bezier(.14,.62,.16,1)' },
+        ...frames.map((angle, index) => ({ transform: `rotate(${angle}deg)`, offset: (approachMs + index * settleMs / (frames.length - 1)) / duration, easing: 'ease-in-out' }))];
+      lens.style.transition = 'none'; lens.style.transform = `rotate(${rotation}deg)`;
+      lensBox.style.visibility = 'hidden'; lensBox.style.opacity = '0'; lensBox.hidden = false;
       const stage = disc.closest('.wheel-stage');
-      $('finish-lens').style.top = Math.max(8, stage.offsetTop + stage.querySelector('.wheel-pointer').offsetTop - $('finish-lens').querySelector('.lens-heading').offsetHeight - 2) + 'px';
+      const headingHeight = lensBox.querySelector('.lens-heading').offsetHeight;
+      lensBox.style.top = Math.max(8, stage.offsetTop + stage.querySelector('.wheel-pointer').offsetTop - headingHeight - 2) + 'px';
+      lensBox.style.transformOrigin = `50% ${headingHeight + 10}px`;
+      const animations = [disc, lens].map(element => element.animate(keyframes, { duration, fill: 'forwards' }));
+      const startTime = document.timeline.currentTime;
+      animations.forEach(animation => { animation.startTime = startTime; });
+      // Start growing from the pointer while the approaching wheel still moves.
+      await new Promise(resolve => setTimeout(resolve, approachMs - 1100));
+      lensBox.style.visibility = 'visible'; lensBox.classList.add('zoom-visible');
       $('wheel-message').textContent = singleGift ? '마지막 선물의 주인공을 기다려요…' : '포인터 아래 경계에서, 마지막 두근거림…';
-      const keyframes = frames.map((angle, index) => ({ transform: `rotate(${angle}deg)`, offset: index / (frames.length - 1), easing: 'ease-in-out' }));
-      const settling = [disc, lens].map(element => element.animate(keyframes, { duration: singleGift ? 900 : 2400, fill: 'forwards' }));
-      await Promise.all(settling.map(animation => animation.finished));
+      const zoom = lensBox.animate([{ opacity: 0, transform: 'translateX(-50%) scale(.72)' }, { opacity: 1, transform: 'translateX(-50%) scale(1)' }], { duration: 650, easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'forwards' });
+      await Promise.all(animations.map(animation => animation.finished));
       for (const element of [disc, lens]) element.style.transform = `rotate(${target}deg)`;
-      settling.forEach(animation => animation.cancel());
+      animations.forEach(animation => animation.cancel());
+      lensBox.style.opacity = '1'; zoom.cancel();
     }
+    rotation = target;
     $('lens-status').textContent = '정지 완료! 포인터가 가리키는 경품을 확인했어요.';
     await new Promise(resolve => setTimeout(resolve, short ? 0 : 450));
-    finalizeRound(); $('finish-lens').hidden = true; showResult();
+    finalizeRound(); lensBox.hidden = true; lensBox.classList.remove('zoom-visible'); showResult();
   }
   function finalizeRound() {
     const result = state.pending;
@@ -311,7 +347,21 @@
     $('history-dialog').showModal();
   }
   function disarmMotion() { camera?.setActive(false); }
+  function restoreGripPreview() {
+    if (gripRotationBase === null || busy) return;
+    rotation = gripRotationBase; gripRotationBase = null;
+    $('draw-wheel').style.transition = 'transform 180ms ease-out';
+    $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
+  }
+  function followGrip(result) {
+    if (result.mode !== 'circle' || !result.grip?.held || !Number.isFinite(result.angleDeg)) { restoreGripPreview(); return; }
+    if (gripRotationBase === null) gripRotationBase = rotation;
+    rotation = gripRotationBase + result.angleDeg;
+    $('draw-wheel').style.transition = reducedMotion.matches ? 'none' : 'transform 90ms linear';
+    $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
+  }
   function resetAutoMotion() {
+    restoreGripPreview();
     showMotionStage('presence');
     camera?.setPoseKind(presentation.starterForRound(state.history.length).kind);
     camera?.setActive(!!camera.running && !busy && !completedRound && !getError());
@@ -330,13 +380,40 @@
   }
   camera = new MotionCamera({
     video: $('camera-video'), canvas: $('tracking-overlay'), onState: cameraState,
-    canRecognize: () => !busy && !completedRound && !document.hidden && !$('history-dialog').open && !$('result-dialog').open && location.hash === '#draw' && !$('draw-page').hidden && !getError(),
+    canRecognize: () => !busy && !completedRound && (!document.hidden || (CameraWindow.isOpen() && !CameraWindow.getWindow().document.hidden)) && !$('history-dialog').open && !$('result-dialog').open && location.hash === '#draw' && !$('draw-page').hidden && !getError(),
     onResult: result => {
       if (busy || completedRound) return;
       if (result.mode && result.mode !== currentStage) showMotionStage(result.mode);
       setProgress(result.progress, result.message);
+      followGrip(result);
       if (result.matched) spin(result.direction || 'clockwise');
     }
+  });
+  $('organization-mode').addEventListener('click', () => {
+    if (busy) return;
+    const available = math.available(state.prizes).some(prize => prize.rank === 1);
+    firstPrizeMode.click(performance.now(), available); renderOperatorMode();
+    $('organization-mode').title = available ? '' : '1등 상품이 모두 소진됐어요.';
+  });
+  $('open-camera-window').addEventListener('click', () => {
+    const opened = CameraWindow.open();
+    $('display-message').textContent = opened ? '카메라 창을 다른 모니터로 옮긴 뒤 전체화면을 눌러 주세요.' : '팝업이 차단됐어요. 주소창에서 이 사이트의 팝업을 허용해 주세요.';
+  });
+  window.addEventListener('camera-window-change', event => {
+    document.body.classList.toggle('dual-monitor', event.detail.open);
+    camera.setAnimationHost(CameraWindow.getWindow() || globalThis);
+    $('open-camera-window').textContent = event.detail.open ? '카메라 창 보기' : '카메라 새 창';
+  });
+  $('roulette-fullscreen').addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { $('display-message').textContent = '이 브라우저에서 전체화면을 열 수 없어요. 창을 최대화해 주세요.'; }
+  });
+  document.addEventListener('fullscreenchange', () => {
+    const full = !!document.fullscreenElement;
+    document.body.classList.toggle('roulette-fullscreen', full);
+    $('roulette-fullscreen').textContent = full ? '전체화면 종료' : '룰렛 전체화면';
   });
   $('connect-camera').addEventListener('click', () => {
     if (camera.running || camera.connecting) camera.stop(); else camera.start();
@@ -358,8 +435,8 @@
     state = initialState(); renderEditor(); resetAutoMotion(); changed();
   });
   window.addEventListener('hashchange', route);
-  document.addEventListener('visibilitychange', () => { if (document.hidden && (camera.running || camera.connecting)) camera.stop('다른 화면으로 이동해 카메라를 껐어요.'); });
-  window.addEventListener('pagehide', () => camera.dispose());
+  document.addEventListener('visibilitychange', () => { if (document.hidden && !CameraWindow.isOpen() && (camera.running || camera.connecting)) camera.stop('다른 화면으로 이동해 카메라를 껐어요.'); });
+  window.addEventListener('pagehide', () => { CameraWindow.close(); camera.dispose(); });
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
   renderEditor(); changed(); showMotionStage('presence'); route(); updateSaveStatus();
   if (state.pending) {

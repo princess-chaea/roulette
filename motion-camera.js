@@ -16,8 +16,11 @@
     constructor({ video, canvas, onState, onResult, canRecognize }) {
       Object.assign(this, { video, canvas, onState, onResult, canRecognize });
       this.detector = new MotionGestures.MotionFlow();
+      this.gripImage = new Image();
+      this.gripImage.src = new URL('../../art/ar-grip.png', BASE).href;
       this.stream = null; this.engine = null; this.phase = 'stopped';
       this.active = false; this.sequence = 0; this.raf = null;
+      this.animationHost = globalThis;
       this.lastTime = -Infinity; this.lastVideoTime = -1;
     }
     get running() { return this.phase === 'ready'; }
@@ -70,9 +73,14 @@
       });
     }
     setActive(active) { this.active = active; this.detector.reset(); if (!active) this.clearOverlay(); }
+    setAnimationHost(host = globalThis) {
+      if (this.raf !== null) this.animationHost.cancelAnimationFrame(this.raf);
+      this.raf = null; this.animationHost = host;
+      if (this.running) this.loop();
+    }
     loop() {
       if (!this.running) return;
-      this.raf = requestAnimationFrame(() => this.loop());
+      this.raf = this.animationHost.requestAnimationFrame(() => this.loop());
       if (!this.active || !this.canRecognize() || this.video.readyState < 2) return;
       const time = performance.now();
       // New frames only, at most ~10 inferences/s. Inference pauses for the whole spin.
@@ -115,21 +123,39 @@
         const t = result.target;
         ctx.lineWidth = width / 140; ctx.strokeStyle = '#ffffffcc'; ctx.setLineDash([width / 60, width / 60]);
         ctx.beginPath(); ctx.ellipse(t.x * width, t.y * height, t.radius * width, t.radiusY * height, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-        ctx.fillStyle = '#f5d57a'; ctx.beginPath(); ctx.arc(t.startX * width, t.startY * height, width / 55, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#173d35'; ctx.font = `bold ${Math.max(12, width / 36)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
-        ctx.fillText('시작', t.startX * width, t.startY * height - width / 30);
         if (result.progress > 12) {
           ctx.strokeStyle = '#d5f477'; ctx.lineWidth = width / 90;
           const reverse = result.direction === 'counterclockwise';
           const amount = (result.progress - 12) / 88 * Math.PI * (reverse ? -1 : 1);
           ctx.beginPath(); ctx.ellipse(t.x * width, t.y * height, t.radius * width, t.radiusY * height, 0, 0, amount, reverse); ctx.stroke();
         }
+        const grip = result.grip || { x: t.startX, y: t.startY, held: false, progress: 0 };
+        const handX = (grip.held ? grip.x : t.startX) * width;
+        const handY = (grip.held ? grip.y : t.startY) * height;
+        // The original asset's base is fixed at the AR circle center; its gold
+        // knob is aligned with the hand, so the crank rotates instead of floating.
+        if (this.gripImage.complete && this.gripImage.naturalWidth) {
+          const image = this.gripImage;
+          const baseX = image.naturalWidth * .38, baseY = image.naturalHeight * .60;
+          const knobX = image.naturalWidth * .745, knobY = image.naturalHeight * .315;
+          const dx = handX - t.x * width, dy = handY - t.y * height;
+          const scale = Math.hypot(dx, dy) / Math.hypot(knobX - baseX, knobY - baseY);
+          ctx.save(); ctx.translate(t.x * width, t.y * height);
+          ctx.rotate(Math.atan2(dy, dx) - Math.atan2(knobY - baseY, knobX - baseX));
+          ctx.scale(scale, scale); ctx.drawImage(image, -baseX, -baseY); ctx.restore();
+        }
+        ctx.lineWidth = width / 125; ctx.strokeStyle = grip.held ? '#d5f477' : '#f5d57a';
+        ctx.beginPath(); ctx.arc(handX, handY, width / 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (grip.held ? 1 : Math.max(.03, grip.progress || 0))); ctx.stroke();
+        ctx.fillStyle = '#fffce6'; ctx.shadowColor = '#173d35'; ctx.shadowBlur = 4;
+        ctx.font = `bold ${Math.max(12, width / 38)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
+        ctx.fillText(grip.held ? '잡았어요! 같이 돌려요' : '손잡이에 손을 멈춰 주세요', handX, handY - width / 20);
+        ctx.shadowBlur = 0;
       }
     }
     clearOverlay() { const ctx = this.canvas.getContext('2d'); ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
     release() {
       this.active = false; this.detector.reset();
-      if (this.raf !== null) cancelAnimationFrame(this.raf);
+      if (this.raf !== null) this.animationHost.cancelAnimationFrame(this.raf);
       this.raf = null;
       this.stream?.getTracks().forEach(track => track.stop()); this.stream = null;
       this.video.pause(); this.video.srcObject = null; this.clearOverlay();

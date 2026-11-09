@@ -43,6 +43,7 @@ function rig(getUserMedia, createEngine) {
     reset() {} setMode() {} update() { return { mode: 'presence', matched: false, progress: 0 }; }
   }
   const sandbox = {
+    Image: class { constructor() { this.complete = false; } },
     URL, location: { protocol: 'http:' }, document: { baseURI: 'http://localhost/' }, isSecureContext: true,
     navigator: { mediaDevices: { getUserMedia } }, performance: { now: () => now },
     requestAnimationFrame(callback) { frames.set(++nextId, callback); return nextId; },
@@ -156,4 +157,26 @@ test('a failed inference closes the bad model and reconnecting creates a working
   assert.equal(good.inferences, 1);
   assert.equal(camera.running, true);
   camera.dispose();
+});
+test('moving the frame clock to a camera window keeps exactly one loop and releases its frames', async () => {
+  const granted = stream();
+  const { camera, frames } = rig(async () => granted, async () => engine());
+  await camera.start();
+  const popupFrames = new Map(); let serial = 100;
+  const host = {
+    requestAnimationFrame(callback) { popupFrames.set(++serial, callback); return serial; },
+    cancelAnimationFrame(id) { popupFrames.delete(id); }
+  };
+  camera.setAnimationHost(host);
+  assert.equal(frames.size, 0);
+  assert.equal(popupFrames.size, 1);
+  assert.equal(granted.track.stops, 0);
+  camera.setAnimationHost();
+  assert.equal(popupFrames.size, 0);
+  assert.equal(frames.size, 1);
+  camera.setAnimationHost(host);
+  camera.stop();
+  assert.equal(popupFrames.size, 0);
+  assert.equal(frames.size, 0);
+  assert.equal(granted.track.stops, 1);
 });
