@@ -77,7 +77,7 @@ function circleSession(aspect = 16 / 9) {
   return { detector, sample, hold, target };
 }
 
-test('the centered handle requires one complete turn in either direction of the mirrored preview', () => {
+test('the centered handle accepts a nearly complete turn in either direction of the mirrored preview', () => {
   for (const sign of [1, -1]) {
     const { hold, sample, target } = circleSession();
     assert.equal(target.x, 0.5);
@@ -87,10 +87,10 @@ test('the centered handle requires one complete turn in either direction of the 
     assert.ok(Math.abs(target.radiusY - target.radius * 16 / 9) < 1e-9);
     hold();
     let result;
-    for (let i = 1; i <= 24; i++) {
+    for (let i = 1; i <= 20; i++) {
       result = sample(sign * i * Math.PI / 12, 1, 15, i % 2 === 0 ? 50 : 105);
       assert.equal(result.direction, sign === 1 ? 'clockwise' : 'counterclockwise');
-      if (i < 24) assert.equal(result.matched, false);
+      if (i < 20) assert.equal(result.matched, false);
     }
     assert.equal(result.matched, true);
     assert.equal(result.progress, 100);
@@ -98,6 +98,16 @@ test('the centered handle requires one complete turn in either direction of the 
     assert.ok(result.speed > 0 && Number.isFinite(result.speed));
     assert.equal(sample(sign * Math.PI).matched, false);
   }
+});
+
+test('the handle stays visible for a distant participant and fits a wide camera', () => {
+  const detector = new GestureDetector();
+  detector.setMode('circle');
+  const distant = person();
+  distant[11].x = 0.54; distant[12].x = 0.46;
+  assert.equal(detector.update(distant, 0, 4/3).target.radius, 0.13);
+  detector.reset();
+  assert.ok(detector.update(person(), 0, 2.5).target.radiusY <= 0.27);
 });
 
 test('a fast start without the initial hold cannot trigger', () => {
@@ -111,10 +121,10 @@ test('the grip fills before locking and reports actual mirrored wrist position a
     let r = sample(0);
     assert.equal(r.grip.held, false);
     assert.equal(r.grip.progress, 0);
-    r = sample(0, 1, 15, 125);
+    r = sample(0, 1, 15, 75);
     assert.equal(r.grip.progress, 0.5);
     assert.equal(r.grip.held, false);
-    r = sample(0, 1, 15, 125);
+    r = sample(0, 1, 15, 75);
     assert.equal(r.grip.held, true);
     assert.equal(r.grip.progress, 1);
     assert.equal(r.angleDeg, 0);
@@ -151,7 +161,7 @@ test('partial sweeps connected through the center never add up to a turn', () =>
   }
 });
 
-test('an uneven full circle works with one wrist, no visible elbows and a briefly hidden opposite shoulder', () => {
+test('an uneven broad circle works with one wrist, no visible elbows and a briefly hidden opposite shoulder', () => {
   const flow = new MotionFlow();
   const aspect = 16 / 9;
   let r;
@@ -169,12 +179,12 @@ test('an uneven full circle works with one wrist, no visible elbows and a briefl
   for (let t = 3100; t <= 3400; t += 100) r = track(0, 1, t, false);
   assert.equal(r.grip.held, true);
   const radii = [0.55, 0.85, 1.5, 1.6];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < 20; i++) {
     r = track(15 * (i + 1), radii[i % 4], 3470 + 70 * i, i < 4);
     assert.equal(r.mode, 'circle');
-    assert.equal(r.matched, i === 23);
+    assert.equal(r.matched, i === 19);
   }
-  assert.ok(Math.abs(r.angleDeg - 360) < 1e-8);
+  assert.ok(Math.abs(r.angleDeg - 300) < 1e-8);
 });
 
 test('the cached shoulder cannot bridge a different person or more than 500ms, and a lost wrist releases the grip', () => {
@@ -189,7 +199,7 @@ test('the cached shoulder cannot bridge a different person or more than 500ms, a
         if (loss === 'wrist') p[15].visibility = 0.40;
       });
       assert.equal(r.matched, false);
-      if (loss !== 'expired') break;
+      if (loss === 'new person') break;
     }
     assert.equal(r.grip.held, false);
     assert.equal(r.angleDeg, 0);
@@ -202,11 +212,55 @@ test('a partial arc cannot be completed after switching wrists, reversing, telep
     const { sample, hold } = circleSession();
     hold();
     for (let i = 1; i <= 3; i++) sample(i * Math.PI / 12);
-    if (interruption === 'reverse') sample(Math.PI / 4 - 0.45);
-    if (interruption === 'jump') sample(Math.PI);
+    if (interruption === 'reverse') sample(Math.PI / 4 - 1.4);
+    if (interruption === 'jump') sample(Math.PI / 4 + Math.PI);
     if (interruption === 'delay') sample(Math.PI / 2, 1, 15, 500);
     const wrist = interruption === 'switch' ? 16 : 15;
     for (let i = 4; i <= 24; i++) assert.equal(sample(i * Math.PI / 12, 1, wrist).matched, false);
+  }
+});
+
+test('a broad off-center grab and four fast samples complete a near lap after 400ms', () => {
+  for (const sign of [1, -1]) {
+    const { sample, target } = circleSession(4/3);
+    assert.ok(Math.abs(target.radius - 0.19) < 1e-8);
+    assert.ok(target.grabRadius >= target.radius * 0.7);
+    for (const dt of [65, 75, 75]) {
+      const held = sample(0, 1.6, 15, dt);
+      assert.equal(held.matched, false);
+    }
+    for (let i = 1; i <= 4; i++) {
+      const r = sample(sign * i * 75 * Math.PI / 180, [1.2, 0.55, 0.8, 1.4][i-1], 15, 100);
+      assert.equal(r.matched, i === 4);
+      assert.equal(r.grip.held, true);
+    }
+  }
+});
+
+test('a half turn remains pending and a small correction can continue in the original direction', () => {
+  const { sample, hold } = circleSession();
+  hold();
+  for (const degree of [60, 120, 180, 140, 220]) {
+    const r = sample(degree * Math.PI / 180, 1, 15, 100);
+    assert.equal(r.matched, false);
+    assert.equal(r.grip.held, true);
+  }
+  assert.equal(sample(300 * Math.PI / 180, 1, 15, 100).matched, true);
+});
+
+test('a brief missing wrist pauses the same grip without crediting the unseen motion', () => {
+  const { sample, hold } = circleSession();
+  hold();
+  const before = sample(Math.PI / 3, 1, 15, 100);
+  const missing = sample(0, 1, 15, 100, p => { p[15] = null; });
+  assert.equal(missing.grip.held, true);
+  assert.equal(missing.angleDeg, before.angleDeg);
+  assert.equal(missing.progress, before.progress);
+  const resumed = sample(Math.PI / 2, 1, 15, 100);
+  assert.equal(resumed.angleDeg, before.angleDeg);
+  assert.equal(resumed.grip.held, true);
+  for (const degree of [150, 210, 270, 330]) {
+    assert.equal(sample(degree * Math.PI / 180, 1, 15, 100).matched, degree === 330);
   }
 });
 
@@ -228,9 +282,8 @@ function upperBody(raised = false) {
 
 function starter(kind, hand = 'left') {
   const points = upperBody(kind === 'hands_up' || kind === 'arm_heart');
-  if (kind === 'arms_out') {
-    points[13] = point(0.74, 0.39); points[15] = point(0.88, 0.38);
-    points[14] = point(0.26, 0.39); points[16] = point(0.12, 0.38);
+  if (kind === 'hands_near_shoulders') {
+    points[15] = point(0.61, 0.35); points[16] = point(0.39, 0.35);
   } else if (kind === 'one_hand_up') {
     const raised = upperBody(true);
     for (const i of (hand === 'left' ? [13, 15] : [14, 16])) points[i] = raised[i];
@@ -241,7 +294,7 @@ function starter(kind, hand = 'left') {
 }
 
 test('each starter pose accepts its own one-second hold and rejects every other starter shape', () => {
-  assert.deepEqual(POSE_KINDS, ['hands_up', 'arms_out', 'one_hand_up', 'arm_heart']);
+  assert.deepEqual(POSE_KINDS, ['hands_up', 'hands_near_shoulders', 'one_hand_up', 'arm_heart']);
   for (const expected of POSE_KINDS) {
     for (const performed of POSE_KINDS) {
       const detector = new GestureDetector({ poseKind: expected });
@@ -265,13 +318,15 @@ test('either hand can be raised for a one-hand pose, but switching sides restart
   }
 });
 
-test('partly bent, slightly lowered open arms stay recognized even when hip tracking flickers', () => {
-  for (const aspect of [1, 16 / 9]) {
-    const detector = new GestureDetector({ poseKind: 'arms_out' });
+test('hands near their shoulders complete a hold with both elbows outside a cropped preview', () => {
+  for (const aspect of [9/16, 1, 16/9]) {
+    const detector = new GestureDetector({ poseKind: 'hands_near_shoulders' });
     for (let t = 0; t <= 1000; t += 100) {
-      const p = starter('arms_out');
-      p[13] = point(0.64, 0.38 + 0.07 * aspect); p[14] = point(0.36, p[13].y);
-      p[15] = point(0.70, 0.38 + 0.105 * aspect); p[16] = point(0.30, p[15].y);
+      const p = starter('hands_near_shoulders');
+      p[13] = p[14] = null;
+      p[15] = point(0.65, 0.38 - 0.04 * aspect);
+      p[16] = point(0.37, 0.38 + 0.08 * aspect);
+      p[15].visibility = 0.46;
       if (t % 200 === 0) { p[23] = point(0.57, 0.62); p[24] = point(0.43, 0.62); }
       const r = detector.update(p, t, aspect);
       assert.equal(r.progress, t / 10);
@@ -280,14 +335,17 @@ test('partly bent, slightly lowered open arms stay recognized even when hip trac
   }
 });
 
-test('hands hanging by the waist, crossed arms, and one extended arm are not an arms-out pose', () => {
-  for (const change of ['waist', 'crossed', 'one arm']) {
-    const p = starter('arms_out');
+test('the shoulder pose requires two visible hands near their own shoulders', () => {
+  for (const change of ['wide arms', 'waist', 'crossed', 'above head', 'out of frame', 'missing wrist']) {
+    const p = starter('hands_near_shoulders');
+    if (change === 'wide arms') { p[15].x = 0.85; p[16].x = 0.15; }
     if (change === 'waist') p[15].y = p[16].y = 0.68;
     if (change === 'crossed') [p[15], p[16]] = [p[16], p[15]];
-    if (change === 'one arm') p[14] = point(0.40, 0.55);
-    const detector = new GestureDetector({ poseKind: 'arms_out' });
-    for (let t = 0; t <= 1100; t += 100) assert.equal(detector.update(p, t, 16 / 9).progress, 0);
+    if (change === 'above head') p[15].y = p[16].y = 0.22;
+    if (change === 'out of frame') p[15].x = 1.1;
+    if (change === 'missing wrist') p[16] = null;
+    const detector = new GestureDetector({ poseKind: 'hands_near_shoulders' });
+    for (let t = 0; t <= 1100; t += 100) assert.equal(detector.update(p, t, 16/9).progress, 0, change);
   }
 });
 
@@ -320,8 +378,8 @@ test('heart needs wide elbows and upper centered hands; a finger heart or tightl
 });
 
 test('changing the target pose starts a fresh presence dwell and the chosen pose survives stage changes', () => {
-  const flow = new MotionFlow({ poseKind: 'arms_out' });
-  for (let t = 0; t <= 2700; t += 100) flow.update(starter('arms_out'), t);
+  const flow = new MotionFlow({ poseKind: 'hands_near_shoulders' });
+  for (let t = 0; t <= 2700; t += 100) flow.update(starter('hands_near_shoulders'), t);
   assert.equal(flow.mode, 'pose');
   flow.setPoseKind('arm_heart');
   for (let t = 2800; t < 4800; t += 100) assert.equal(flow.update(starter('arm_heart'), t).mode, 'presence');
@@ -370,10 +428,10 @@ test('the full sequence recognizes an upper-body-only participant and returns on
   for (let i = 0; i < 6; i++, time += 65) {
     assert.equal(flow.update(wristAt(0), time, aspect).matched, false);
   }
-  for (let i = 1; i <= 24; i++, time += 65) {
+  for (let i = 1; i <= 20; i++, time += 65) {
     result = flow.update(wristAt(-Math.PI * i / 12), time, aspect);
     assert.equal(result.mode, 'circle');
-    assert.equal(result.matched, i === 24);
+    assert.equal(result.matched, i === 20);
   }
   assert.equal(result.direction, 'counterclockwise');
   assert.equal(flow.update(wristAt(-Math.PI), time, aspect).matched, false);

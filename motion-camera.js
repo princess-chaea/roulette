@@ -83,8 +83,9 @@
       this.raf = this.animationHost.requestAnimationFrame(() => this.loop());
       if (!this.active || !this.canRecognize() || this.video.readyState < 2) return;
       const time = performance.now();
-      // New frames only, at most ~10 inferences/s. Inference pauses for the whole spin.
-      if (time - this.lastTime < 95 || this.video.currentTime === this.lastVideoTime) return;
+      // Use a quicker sampling rate for the moving crank; poses remain at ~10/s.
+      const interval = this.detector.mode === 'circle' ? 45 : 95;
+      if (time - this.lastTime < interval || this.video.currentTime === this.lastVideoTime) return;
       this.lastTime = time; this.lastVideoTime = this.video.currentTime;
       try {
         const results = this.engine.detectForVideo(this.video, time);
@@ -130,8 +131,19 @@
           ctx.beginPath(); ctx.ellipse(t.x * width, t.y * height, t.radius * width, t.radiusY * height, 0, 0, amount, reverse); ctx.stroke();
         }
         const grip = result.grip || { x: t.startX, y: t.startY, held: false, progress: 0 };
-        const handX = (grip.held ? grip.x : t.startX) * width;
-        const handY = (grip.held ? grip.y : t.startY) * height;
+        const rawX = (grip.held ? grip.x : t.startX) * width;
+        const rawY = (grip.held ? grip.y : t.startY) * height;
+        const direction = Math.atan2(rawY - t.y * height, rawX - t.x * width);
+        const distance = Math.hypot(rawX - t.x * width, rawY - t.y * height);
+        // Keep the crank readable when a freely drawn circle moves nearer the hub.
+        const armLength = Math.max(t.radius * width * .85, Math.min(t.radius * width * 1.35, distance));
+        const handX = t.x * width + Math.cos(direction) * armLength;
+        const handY = t.y * height + Math.sin(direction) * armLength;
+        if (!grip.held) {
+          const grabRadius = (t.grabRadius || t.radius * .75) * width;
+          ctx.fillStyle = '#f5d57a25'; ctx.strokeStyle = '#f5d57ab0'; ctx.lineWidth = width / 180;
+          ctx.beginPath(); ctx.arc(t.startX * width, t.startY * height, grabRadius, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        }
         // The original asset's base is fixed at the AR circle center; its gold
         // knob is aligned with the hand, so the crank rotates instead of floating.
         if (this.gripImage.complete && this.gripImage.naturalWidth) {
@@ -145,10 +157,10 @@
           ctx.scale(scale, scale); ctx.drawImage(image, -baseX, -baseY); ctx.restore();
         }
         ctx.lineWidth = width / 125; ctx.strokeStyle = grip.held ? '#d5f477' : '#f5d57a';
-        ctx.beginPath(); ctx.arc(handX, handY, width / 30, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (grip.held ? 1 : Math.max(.03, grip.progress || 0))); ctx.stroke();
+        ctx.beginPath(); ctx.arc(handX, handY, width / 23, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (grip.held ? 1 : Math.max(.03, grip.progress || 0))); ctx.stroke();
         ctx.fillStyle = '#fffce6'; ctx.shadowColor = '#173d35'; ctx.shadowBlur = 4;
         ctx.font = `bold ${Math.max(12, width / 38)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
-        ctx.fillText(grip.held ? '잡았어요! 같이 돌려요' : '손잡이에 손을 멈춰 주세요', handX, handY - width / 20);
+        ctx.fillText(grip.held ? '좋아요! 편하게 한 바퀴!' : '이 근처에 손을 가져오세요', handX, handY - width / 20);
         ctx.shadowBlur = 0;
       }
     }

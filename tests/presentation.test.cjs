@@ -2,7 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {STARTER_POSES,starterForRound,rankImage}=require('../presentation.js');
 test('four starter poses cycle independently of prize odds and include an arm heart',()=>{
-  assert.deepEqual(STARTER_POSES.map(p=>p.kind),['hands_up','arms_out','one_hand_up','arm_heart']);
+  assert.deepEqual(STARTER_POSES.map(p=>p.kind),['hands_up','hands_near_shoulders','one_hand_up','arm_heart']);
   assert.equal(starterForRound(0).kind,'hands_up');
   assert.equal(starterForRound(3).kind,'arm_heart');
   assert.equal(starterForRound(4).kind,'hands_up');
