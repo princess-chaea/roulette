@@ -1,7 +1,7 @@
 # 등수 마스코트 생성 기록 — 06~10
 
-생성일: 2026-11-09  
-도구: OpenAI built-in `image_gen` · 투명 배경 PNG  
+생성일: 2026-11-09
+도구: OpenAI built-in `image_gen` · 투명 배경 PNG
 스타일 참조: `assets/art/pose-guide.png` (민트 새싹, 짙은 초록 멜빵바지, 크림 셔츠, 금색 단추, 점토 질감)
 
 | 파일 | 최종 프롬프트 요약 | 생성 결과 |
