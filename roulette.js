@@ -38,7 +38,20 @@
     const offsets = amplitude ? [0, amplitude, -amplitude * .65, amplitude * .42, -amplitude * .22, margin] : [0, 0];
     return { landingAngle, target, boundary, amplitude, frames: offsets.map(delta => boundary + sign * delta) };
   }
-  const api = { available, total, segments, pick, rotationFor, finishPlan };
+  function animationFrames(current, plan, approachMs = 4100, settleMs = 2400) {
+    const duration = approachMs + settleMs;
+    const stepMs = settleMs / (plan.frames.length - 1);
+    // The boundary is a crossing, not a resting point. Match the final approach
+    // velocity to the initial velocity of the first cubic overshoot (3 * distance / time).
+    const exitVelocity = 3 * (plan.frames[1] - plan.boundary) / stepMs;
+    const endY = 1 - exitVelocity * approachMs * .7 / (plan.boundary - current);
+    return [{ angle: current, offset: 0, easing: `cubic-bezier(.12,.2,.3,${endY})` },
+      ...plan.frames.map((angle, index) => ({ angle,
+        offset: (approachMs + index * stepMs) / duration,
+        easing: index === 0 ? 'cubic-bezier(0.3333333333333333,1,0.6666666666666666,1)' : 'ease-in-out'
+      }))];
+  }
+  const api = { available, total, segments, pick, rotationFor, finishPlan, animationFrames };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.RouletteMath = api;
 })();

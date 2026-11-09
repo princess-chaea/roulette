@@ -243,7 +243,8 @@
     const selected = firstPrizeMode.take(math.segments(state.prizes)) || math.pick(state.prizes, random);
     renderOperatorMode();
     if (!selected) { busy = false; updateControls(); return; }
-    const { target, boundary, landingAngle, frames } = math.finishPlan(state.prizes, selected, rotation, direction);
+    const plan = math.finishPlan(state.prizes, selected, rotation, direction);
+    const { target, landingAngle } = plan;
     state.pending = { id: crypto.randomUUID(), prizeId: selected.id, rank: selected.rank, prize: selected.name, name: `${state.history.length + 1}회차`, time: new Date().toISOString(), landingAngle, direction };
     save();
     const short = reducedMotion.matches;
@@ -268,8 +269,8 @@
       const duration = approachMs + settleMs;
       // One timeline includes the whole approach and all settling turns. Neither
       // wheel pauses or restarts when the pointer magnification becomes visible.
-      const keyframes = [{ transform: `rotate(${rotation}deg)`, offset: 0, easing: 'cubic-bezier(.12,.2,.3,1)' },
-        ...frames.map((angle, index) => ({ transform: `rotate(${angle}deg)`, offset: (approachMs + index * settleMs / (frames.length - 1)) / duration, easing: 'ease-in-out' }))];
+      const keyframes = math.animationFrames(rotation, plan, approachMs, settleMs)
+        .map(({ angle, ...frame }) => ({ ...frame, transform: `rotate(${angle}deg)` }));
       lens.style.transition = 'none'; lens.style.transform = `rotate(${rotation}deg)`;
       lensBox.style.visibility = 'hidden'; lensBox.style.opacity = '0'; lensBox.hidden = false;
       const stage = disc.closest('.wheel-stage');

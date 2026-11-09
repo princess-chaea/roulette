@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { total, segments, pick, rotationFor, finishPlan } = require('../roulette.js');
+const { total, segments, pick, rotationFor, finishPlan, animationFrames } = require('../roulette.js');
 const prizes = [{ id: 'a', quantity: 1 }, { id: 'b', quantity: 3 }, { id: 'c', quantity: 6 }];
 test('remaining quantity determines exact angles and probability', () => {
   assert.equal(total(prizes), 10);
@@ -55,4 +55,20 @@ test('only one remaining gift has no fabricated boundary oscillation', () => {
   const plan = finishPlan(single, segments(single)[0]);
   assert.equal(plan.amplitude,0);
   assert.deepEqual(plan.frames,[plan.target,plan.target]);
+});
+
+
+test('the approach crosses the boundary at the same nonzero velocity as the first sway', () => {
+  for (const direction of ['clockwise','counterclockwise']) for (const prize of segments(prizes)) {
+    const plan = finishPlan(prizes, prize, 0, direction);
+    const keys = animationFrames(0, plan);
+    const y2 = Number(keys[0].easing.slice(13,-1).split(',')[3]);
+    const incoming = (plan.boundary / 4100) * (1-y2) / .7;
+    const outgoing = 3 * (keys[2].angle-keys[1].angle) / 480;
+    assert.ok(Math.abs(incoming)>0, 'The boundary must not become a stop');
+    assert.ok(Math.abs(incoming-outgoing)<1e-10, 'Velocity must be continuous through the boundary');
+    assert.equal(keys[1].easing,'cubic-bezier(0.3333333333333333,1,0.6666666666666666,1)');
+    assert.equal(keys.at(-1).angle,plan.target);
+    assert.equal(keys.at(-1).offset,1);
+  }
 });
