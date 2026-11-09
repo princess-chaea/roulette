@@ -1,0 +1,15 @@
+{
+  "package": "@mediapipe/tasks-vision",
+  "version": "1.2.2",
+  "packageSource": "https://registry.npmjs.org/@mediapipe/tasks-vision/-/tasks-vision-1.2.2.tgz",
+  "modelSource": "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
+  "sha256": {
+    "LICENSE": "8707eef0533987efc5b155d64761eeb6e20793f50b9bd1a68dad1cf4719d0ed8",
+    "pose_landmarker_lite.task": "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+    "vision_bundle.mjs": "b65acb59b370cd6561afd9d04c29ed7a87e7ed6386922ac1b263af1f1ad06b7d",
+    "wasm/vision_wasm_internal.js": "f2b9c17131ea79716ec6bf07b117a087b2749a6f8a1e2f1f2e77a9382092db5b",
+    "wasm/vision_wasm_internal.wasm": "f5bd25147ac89d506074293ce2675969b10e827180db95a0d9689c2ed80764ab",
+    "wasm/vision_wasm_module_internal.js": "72fba0ac8a4034ce9d63f68389df1dead52069409ea621688eedf97f01d4362f",
+    "wasm/vision_wasm_module_internal.wasm": "b8927a2eebfe80dd98a426a210a9e820c8215168c06f3bcf5d4d09080f623db5"
+  }
+}

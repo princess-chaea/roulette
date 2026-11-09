@@ -17,9 +17,10 @@
     const options = segments(prizes);
     return options.find(segment => unit * 360 < segment.end) || null;
   }
-  function rotationFor(segment, current = 0, laps = 5) {
+  function rotationFor(segment, current = 0, laps = 5, direction = 'clockwise') {
     const normalized = ((current % 360) + 360) % 360;
     const destination = (360 - segment.midpoint) % 360;
+    if (direction === 'counterclockwise') return current - laps * 360 - (normalized - destination + 360) % 360;
     return current + laps * 360 + (destination - normalized + 360) % 360;
   }
   const api = { available, total, segments, pick, rotationFor };

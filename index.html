@@ -8,6 +8,8 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23173d35'/%3E%3Ctext x='20' y='29' text-anchor='middle' font-size='30' fill='%23d5f477'%3E✳%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script src="roulette.js" defer></script>
+  <script src="motion-gestures.js" defer></script>
+  <script src="motion-camera.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -25,12 +27,12 @@
   </defs></svg>
   <a class="skip-link" href="#main">본문으로 건너뛰기</a>
   <header class="site-header">
-    <a href="#setup" class="brand" aria-label="모션 룰렛 설계 화면"><span class="brand-mark">✳</span><span>모션 룰렛<small>MOTION ROULETTE</small></span></a>
+    <a href="#setup" class="brand" aria-label="모션 룰렛 설계 화면"><img class="brand-wheel" src="assets/art/roulette-logo.png" alt=""><span>모션 룰렛<small>MOTION ROULETTE</small></span></a>
     <nav class="page-tabs" aria-label="주요 화면">
       <a href="#setup" id="setup-tab"><svg><use href="#i-grid"/></svg>룰렛 설계</a>
       <a href="#draw" id="draw-tab"><svg><use href="#i-play"/></svg>룰렛 돌리기</a>
     </nav>
-    <span class="prototype-badge"><span></span>화면 초안 <b>01</b></span>
+    <div class="organization"><img src="assets/brand/research-group-a.png" alt="초등정보교과교육연구회 — A안 로고"></div>
   </header>
 
   <main id="main">
@@ -49,8 +51,8 @@
           <section class="card motion-settings" aria-labelledby="motion-heading">
             <div class="card-heading"><div><span class="section-no">02</span><h2 id="motion-heading">어떻게 시작할까요?</h2></div><span class="muted small">모션 방식</span></div>
             <div class="motion-options" role="group" aria-label="모션 방식 선택">
-              <button data-mode="pose" class="motion-option"><span class="motion-emoji">\o/</span><span><strong>동작 따라 하기</strong><small>안내 자세를 취하면 시작!</small></span><span class="radio-dot"></span></button>
-              <button data-mode="circle" class="motion-option"><span class="motion-emoji circle-emoji">↻</span><span><strong>룰렛 돌리는 동작</strong><small>손으로 원을 그리면 시작!</small></span><span class="radio-dot"></span></button>
+              <button data-mode="pose" class="motion-option"><img class="motion-thumbnail" src="assets/art/pose-guide.png" alt=""><span><strong>동작 따라 하기</strong><small>양손을 들고 1초 유지해요</small></span><span class="radio-dot"></span></button>
+              <button data-mode="circle" class="motion-option"><img class="motion-thumbnail" src="assets/art/circle-guide.png" alt=""><span><strong>룰렛 돌리는 동작</strong><small>손으로 반 바퀴 돌려요</small></span><span class="radio-dot"></span></button>
             </div>
           </section>
           <section class="card title-settings"><label for="event-title"><span class="section-no">03</span><strong>오늘의 행사 이름</strong></label><input id="event-title" maxlength="40" placeholder="예: 우리 반 행운 뽑기"><span class="small muted">추첨 화면 상단에 표시돼요.</span></section>
@@ -58,7 +60,7 @@
         <section class="card preview-card" aria-labelledby="preview-heading">
           <div class="card-heading"><h2 id="preview-heading">룰렛 미리보기</h2><span class="live-badge"><i></i>실시간 반영</span></div>
           <div class="preview-decoration" aria-hidden="true"><span>✦</span><span>✧</span></div>
-          <div class="wheel-stage setup-wheel"><div class="wheel-pointer"></div><div id="setup-wheel" class="wheel-disc"></div><span class="wheel-center"><span>✳</span><b>GOOD LUCK</b></span></div>
+          <div class="wheel-stage setup-wheel"><div class="wheel-pointer"></div><div id="setup-wheel" class="wheel-disc"></div><span class="wheel-center"><img src="assets/art/roulette-logo.png" alt=""><b>GOOD LUCK</b></span></div>
           <p class="preview-caption">어떤 행운이 기다리고 있을까요?</p>
           <div id="preview-legend" class="prize-legend"></div>
           <div class="preview-footer"><svg><use href="#i-gift"/></svg><span>꽝 없이, 모두에게 선물 같은 순간</span></div>
@@ -72,37 +74,27 @@
       <div class="draw-layout">
         <section class="card draw-wheel-card" aria-labelledby="draw-wheel-heading">
           <div class="card-heading"><h2 id="draw-wheel-heading"><span class="status-light"></span>행운의 룰렛</h2><span class="pill" id="remaining-pill">20개 남음</span></div>
-          <div class="wheel-stage large-wheel"><div class="wheel-pointer"></div><div id="draw-wheel" class="wheel-disc"></div><span class="wheel-center"><span>✳</span><b>LET’S SPIN!</b></span></div>
+          <div class="wheel-stage large-wheel"><div class="wheel-pointer"></div><div id="draw-wheel" class="wheel-disc"></div><span class="wheel-center"><img src="assets/art/roulette-logo.png" alt=""><b>LET’S SPIN!</b></span></div>
+          <div class="finish-lens" id="finish-lens" hidden aria-label="마지막 경계선 확대 화면"><div class="lens-heading"><span>FINAL MOMENT</span><strong>마지막 한 칸, 천천히 확인해요</strong><span>확대</span></div><div class="lens-viewport"><div class="lens-disc" id="lens-disc"></div><div class="lens-pointer"></div><div class="lens-ticks"></div></div><p id="lens-status">포인터가 완전히 멈춘 뒤 결과를 발표해요.</p></div>
           <p id="wheel-message" class="wheel-message" aria-live="polite">두근두근, 당신의 행운을 기다리는 중</p>
-          <div id="draw-legend" class="draw-legend"></div>
+          <div class="draw-gifts-heading"><h3>행운의 선물</h3><span>남은 상품을 확인해요</span></div><div id="draw-legend" class="draw-legend"></div>
         </section>
         <div class="draw-controls">
-          <section class="card participant-card"><label for="participant"><span class="section-no">01</span><strong>이번 주인공은 누구인가요?</strong></label><div class="participant-input"><span aria-hidden="true">☺</span><input id="participant" maxlength="30" autocomplete="off" placeholder="참가자 이름을 입력해 주세요"></div></section>
           <section class="card camera-card" aria-labelledby="camera-heading">
-            <div class="card-heading"><h2 id="camera-heading"><svg><use href="#i-camera"/></svg>모션으로 시작하기</h2><span class="simulation-badge">시뮬레이션</span></div>
+            <div class="card-heading"><h2 id="camera-heading"><svg><use href="#i-camera"/></svg>모션으로 시작하기</h2><span id="camera-status" class="camera-status" role="status">연결 안 됨</span></div>
             <div class="mini-tabs" role="group" aria-label="추첨 동작 선택"><button data-mode="pose">동작 따라 하기</button><button data-mode="circle">룰렛 돌리기</button></div>
-            <div class="camera-preview" id="camera-preview">
-              <span class="camera-label"><i></i>카메라 연결 전 · 화면 시안</span>
-              <div class="camera-corners" aria-hidden="true"></div>
-              <svg class="pose-guide" id="pose-guide" viewBox="0 0 360 220" role="img" aria-label="양팔을 위로 든 자세 안내 그림">
-                <path class="guide-aura" d="M95 80Q80 28 120 20M265 80Q280 28 240 20"/>
-                <path class="body-fill" d="M158 108Q180 98 202 108L214 199H146Z"/>
-                <path class="body-line" d="m159 116-35-30-14-43m91 73 35-30 14-43M164 198l-5 21m37-21 5 21"/>
-                <circle class="head" cx="180" cy="74" r="24"/>
-                <path class="face" d="M172 75h1m14 0h1m-14 9q6 6 12 0"/>
-                <g class="tracking-points"><circle cx="110" cy="43" r="6"/><circle cx="124" cy="86" r="5"/><circle cx="159" cy="116" r="5"/><circle cx="250" cy="43" r="6"/><circle cx="236" cy="86" r="5"/><circle cx="201" cy="116" r="5"/></g>
-                <text x="82" y="33">✦</text><text x="264" y="33">✦</text>
-              </svg>
-              <svg class="circle-guide" id="circle-guide" viewBox="0 0 360 220" role="img" aria-label="손으로 원을 따라 돌리는 동작 안내 그림" hidden>
-                <circle class="circle-track" cx="180" cy="114" r="73"/><path class="circle-arrow" d="M118 77a73 73 0 0 1 130 13m-20-6 21 10 8-22"/>
-                <g class="hand-guide"><path d="M170 143v-40q0-9 7-9t7 9v17-34q0-9 7-9t7 9v35-25q0-9 7-9t7 9v29-15q0-8 7-8t7 8v36q0 31-28 31h-11q-17 0-25-15l-16-26q-5-8 2-12t13 4Z"/></g>
-                <circle class="orbit-dot" cx="108" cy="113" r="8"/><text x="179" y="211" text-anchor="middle">화살표를 따라 크게 돌려 주세요</text>
-              </svg>
-              <div class="camera-feedback"><span id="camera-feedback">동작 안내 미리보기</span><span id="progress-number">0%</span></div><div class="progress-track" role="progressbar" aria-label="동작 시연 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="motion-progress"><span id="progress-fill"></span></div>
+            <div class="camera-preview camera-live-view" id="camera-preview">
+              <video id="camera-video" autoplay muted playsinline hidden aria-label="좌우가 반전된 카메라 영상"></video>
+              <canvas id="tracking-overlay" hidden aria-label="감지된 팔 위치와 동작 안내 원"></canvas>
+              <div class="camera-empty" id="camera-empty"><img id="pose-guide" class="guide-image" src="assets/art/pose-guide.png" alt="양손을 머리 위로 든 새싹 캐릭터"><img id="circle-guide" class="guide-image" src="assets/art/circle-guide.png" alt="한 손으로 원을 그리는 새싹 캐릭터" hidden><span>카메라를 연결하고 행운을 시작해요</span></div>
+              <span class="camera-label" id="camera-label"><i></i><span id="camera-label-text">카메라 대기 중</span></span>
+              <div class="live-guide" id="live-guide" hidden><span>따라 해 보세요</span><img id="live-guide-image" src="assets/art/pose-guide.png" alt="현재 목표 동작"></div>
             </div>
-            <div class="gesture-instruction"><span class="step-icon">✦</span><div><h3 id="gesture-title">양손을 머리 위로 올려 주세요!</h3><p id="gesture-description">자세를 유지하면 룰렛이 돌아가요.</p></div></div>
-            <button class="button lime full" id="simulate-motion"><svg><use href="#i-spark"/></svg>동작 성공 시연하기<svg><use href="#i-arrow"/></svg></button>
-            <p class="prototype-note">화면 초안에서는 버튼으로 동작 성공을 시연해요.<br>실제 카메라 촬영·모션 인식은 다음 단계에 연결합니다.</p>
+            <div class="camera-meter"><div class="camera-feedback"><span id="camera-feedback" aria-live="polite">카메라 연결 후 동작 인식을 시작해 주세요.</span><span id="progress-number">0%</span></div><div class="progress-track" role="progressbar" aria-label="동작 인식 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="motion-progress"><span id="progress-fill"></span></div></div>
+            <div class="gesture-instruction"><span class="step-icon">✦</span><div><h3 id="gesture-title">양손을 머리 위로 올려 주세요!</h3><p id="gesture-description">자세를 1초 유지하면 룰렛이 돌아가요.</p></div></div>
+            <div class="camera-actions"><button class="button secondary" id="connect-camera"><svg><use href="#i-camera"/></svg><span id="camera-button-label">카메라 연결</span></button><button class="button lime" id="arm-motion" disabled><svg><use href="#i-spark"/></svg><span id="arm-button-label">동작 인식 시작</span></button></div>
+            <p id="camera-error" class="form-message" role="status"></p>
+            <p class="privacy-note">영상은 이 기기에서 분석하며 녹화·업로드하지 않아요.<br>밝은 곳에서 한 명씩, 양팔과 허리까지 보여 주세요.</p>
           </section>
           <button class="button manual-button" id="manual-spin"><svg><use href="#i-play"/></svg>버튼으로 돌리기</button>
           <p id="draw-error" class="form-message" role="status"></p>
@@ -112,7 +104,7 @@
     </section>
     <footer class="site-footer"><span>✳ MOTION ROULETTE</span><p>작은 움직임, 커다란 설렘.</p><span>DESIGNED FOR YOUR LUCKY DAY</span></footer>
   </main>
-  <dialog id="result-dialog" class="result-dialog" aria-labelledby="result-prize" aria-describedby="result-person"><form method="dialog"><button class="dialog-close" aria-label="당첨 결과 닫기">×</button><div class="result-confetti" aria-hidden="true">✦ · ✧ · ✦</div><p class="eyebrow">A LITTLE LUCK, JUST FOR YOU</p><div class="result-medal" aria-hidden="true">✳</div><p id="result-rank" class="result-rank"></p><h2 id="result-prize"></h2><p id="result-person"></p><p class="result-saved"><svg><use href="#i-check"/></svg>당첨 기록과 남은 개수에 반영했어요</p><button class="button primary full" id="next-participant" value="next">다음 주인공 맞이하기<svg><use href="#i-arrow"/></svg></button></form></dialog>
-  <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-heading"><div class="card-heading"><h2 id="history-heading">오늘의 당첨 기록</h2><button class="dialog-close" id="close-history" aria-label="당첨 기록 닫기">×</button></div><div id="history-list"></div><p class="small muted">이 화면 초안의 시연 결과이며 현재 기기에만 저장돼요.</p></dialog>
+  <dialog id="result-dialog" class="result-dialog" aria-labelledby="result-prize" aria-describedby="result-person"><form method="dialog"><button class="dialog-close" aria-label="당첨 결과 닫기">×</button><div class="result-confetti" aria-hidden="true">✦ · ✧ · ✦</div><p class="eyebrow">A LITTLE LUCK, JUST FOR YOU</p><div class="result-medal" aria-hidden="true">✳</div><p id="result-rank" class="result-rank"></p><h2 id="result-prize"></h2><p id="result-person"></p><p class="result-saved"><svg><use href="#i-check"/></svg>당첨 기록과 남은 개수에 반영했어요</p><button class="button primary full" id="next-participant" value="next">한 번 더 돌리기<svg><use href="#i-arrow"/></svg></button></form></dialog>
+  <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-heading"><div class="card-heading"><h2 id="history-heading">오늘의 당첨 기록</h2><button class="dialog-close" id="close-history" aria-label="당첨 기록 닫기">×</button></div><div id="history-list"></div><p class="small muted">당첨 기록은 현재 기기에만 저장돼요.</p></dialog>
 </body>
 </html>

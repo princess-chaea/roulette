@@ -28,3 +28,11 @@ test('spin destination always places the selected segment under the top pointer'
     assert.ok(Math.abs(((segment.midpoint + end) % 360)) < 1e-9);
   }
 });
+test('counterclockwise gesture preserves the winning segment and rotates backward', () => {
+  for (const start of [0, 35, -720, 2234]) for (const segment of segments(prizes)) {
+    const end = rotationFor(segment, start, 5, 'counterclockwise');
+    assert.ok(end <= start - 1800);
+    const alignment = ((segment.midpoint + end) % 360 + 360) % 360;
+    assert.ok(alignment < 1e-9 || Math.abs(alignment - 360) < 1e-9);
+  }
+});
