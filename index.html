@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#173d35">
+  <title>모션 룰렛 — 움직이면, 행운이 시작돼요</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='12' fill='%23173d35'/%3E%3Ctext x='20' y='29' text-anchor='middle' font-size='30' fill='%23d5f477'%3E✳%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+  <script src="roulette.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <svg class="icon-defs" aria-hidden="true"><defs>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
+    <symbol id="i-gift" viewBox="0 0 24 24"><path d="M4 11v10h16V11M12 7v14M3 7h18v4H3z"/><path d="M12 7S4 8 5 4s7 3 7 3Zm0 0s8 1 7-3-7 3-7 3Z"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="13" rx="3"/><path d="m16 10 5-3v11l-5-3"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M6 6l1 15h10l1-15M10 10v7m4-7v7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 10a9 9 0 1 1 1 7M3 4v6h6m3-4v6l4 2"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 2.5 7.5L22 12l-7.5 2.5L12 22l-2.5-7.5L2 12l7.5-2.5Z"/></symbol>
+  </defs></svg>
+  <a class="skip-link" href="#main">본문으로 건너뛰기</a>
+  <header class="site-header">
+    <a href="#setup" class="brand" aria-label="모션 룰렛 설계 화면"><span class="brand-mark">✳</span><span>모션 룰렛<small>MOTION ROULETTE</small></span></a>
+    <nav class="page-tabs" aria-label="주요 화면">
+      <a href="#setup" id="setup-tab"><svg><use href="#i-grid"/></svg>룰렛 설계</a>
+      <a href="#draw" id="draw-tab"><svg><use href="#i-play"/></svg>룰렛 돌리기</a>
+    </nav>
+    <span class="prototype-badge"><span></span>화면 초안 <b>01</b></span>
+  </header>
+
+  <main id="main">
+    <section id="setup-page" class="page">
+      <div class="page-heading"><div><p class="eyebrow">MAKE YOUR LUCK</p><h1>우리만의 행운을 설계해요<span class="heading-dot">.</span></h1><p class="subtitle">상품과 개수만 정하면, 룰렛은 알아서 준비할게요.</p></div><button class="button primary" id="go-draw">추첨 화면으로<svg><use href="#i-arrow"/></svg></button></div>
+      <div class="setup-layout">
+        <div class="editor-stack">
+          <section class="card prize-card" aria-labelledby="prizes-heading">
+            <div class="card-heading"><div><span class="section-no">01</span><h2 id="prizes-heading">어떤 선물을 나눌까요?</h2></div><span class="pill" id="total-pill">총 20개</span></div>
+            <div class="table-head"><span>등수</span><span>상품명</span><span>개수</span><span></span></div>
+            <div id="prize-rows"></div>
+            <button class="add-prize" id="add-prize"><svg><use href="#i-plus"/></svg>상품 추가하기</button>
+            <div class="info-note"><span>ⓘ</span><p>상품 개수에 맞춰 조각 크기와 당첨 확률이 자동으로 정해져요.</p></div>
+            <p id="validation-message" class="form-message" role="status"></p>
+          </section>
+          <section class="card motion-settings" aria-labelledby="motion-heading">
+            <div class="card-heading"><div><span class="section-no">02</span><h2 id="motion-heading">어떻게 시작할까요?</h2></div><span class="muted small">모션 방식</span></div>
+            <div class="motion-options" role="group" aria-label="모션 방식 선택">
+              <button data-mode="pose" class="motion-option"><span class="motion-emoji">\o/</span><span><strong>동작 따라 하기</strong><small>안내 자세를 취하면 시작!</small></span><span class="radio-dot"></span></button>
+              <button data-mode="circle" class="motion-option"><span class="motion-emoji circle-emoji">↻</span><span><strong>룰렛 돌리는 동작</strong><small>손으로 원을 그리면 시작!</small></span><span class="radio-dot"></span></button>
+            </div>
+          </section>
+          <section class="card title-settings"><label for="event-title"><span class="section-no">03</span><strong>오늘의 행사 이름</strong></label><input id="event-title" maxlength="40" placeholder="예: 우리 반 행운 뽑기"><span class="small muted">추첨 화면 상단에 표시돼요.</span></section>
+        </div>
+        <section class="card preview-card" aria-labelledby="preview-heading">
+          <div class="card-heading"><h2 id="preview-heading">룰렛 미리보기</h2><span class="live-badge"><i></i>실시간 반영</span></div>
+          <div class="preview-decoration" aria-hidden="true"><span>✦</span><span>✧</span></div>
+          <div class="wheel-stage setup-wheel"><div class="wheel-pointer"></div><div id="setup-wheel" class="wheel-disc"></div><span class="wheel-center"><span>✳</span><b>GOOD LUCK</b></span></div>
+          <p class="preview-caption">어떤 행운이 기다리고 있을까요?</p>
+          <div id="preview-legend" class="prize-legend"></div>
+          <div class="preview-footer"><svg><use href="#i-gift"/></svg><span>꽝 없이, 모두에게 선물 같은 순간</span></div>
+        </section>
+      </div>
+      <div class="page-bottom"><span id="save-status"><svg><use href="#i-check"/></svg>이 기기에 자동 저장돼요</span><button id="reset-sample" class="text-button">예시로 다시 채우기</button></div>
+    </section>
+
+    <section id="draw-page" class="page" hidden>
+      <div class="page-heading draw-heading"><div><p class="eyebrow" id="draw-event">OUR LUCKY MOMENT</p><h1>움직이면, 행운이 시작돼요<span class="heading-dot">.</span></h1><p class="subtitle">카메라 앞에서 준비해 주세요. 오늘의 주인공은 바로 당신!</p></div><button class="button secondary" id="show-history"><svg><use href="#i-history"/></svg>당첨 기록 <span id="history-count">0</span></button></div>
+      <div class="draw-layout">
+        <section class="card draw-wheel-card" aria-labelledby="draw-wheel-heading">
+          <div class="card-heading"><h2 id="draw-wheel-heading"><span class="status-light"></span>행운의 룰렛</h2><span class="pill" id="remaining-pill">20개 남음</span></div>
+          <div class="wheel-stage large-wheel"><div class="wheel-pointer"></div><div id="draw-wheel" class="wheel-disc"></div><span class="wheel-center"><span>✳</span><b>LET’S SPIN!</b></span></div>
+          <p id="wheel-message" class="wheel-message" aria-live="polite">두근두근, 당신의 행운을 기다리는 중</p>
+          <div id="draw-legend" class="draw-legend"></div>
+        </section>
+        <div class="draw-controls">
+          <section class="card participant-card"><label for="participant"><span class="section-no">01</span><strong>이번 주인공은 누구인가요?</strong></label><div class="participant-input"><span aria-hidden="true">☺</span><input id="participant" maxlength="30" autocomplete="off" placeholder="참가자 이름을 입력해 주세요"></div></section>
+          <section class="card camera-card" aria-labelledby="camera-heading">
+            <div class="card-heading"><h2 id="camera-heading"><svg><use href="#i-camera"/></svg>모션으로 시작하기</h2><span class="simulation-badge">시뮬레이션</span></div>
+            <div class="mini-tabs" role="group" aria-label="추첨 동작 선택"><button data-mode="pose">동작 따라 하기</button><button data-mode="circle">룰렛 돌리기</button></div>
+            <div class="camera-preview" id="camera-preview">
+              <span class="camera-label"><i></i>카메라 연결 전 · 화면 시안</span>
+              <div class="camera-corners" aria-hidden="true"></div>
+              <svg class="pose-guide" id="pose-guide" viewBox="0 0 360 220" role="img" aria-label="양팔을 위로 든 자세 안내 그림">
+                <path class="guide-aura" d="M95 80Q80 28 120 20M265 80Q280 28 240 20"/>
+                <path class="body-fill" d="M158 108Q180 98 202 108L214 199H146Z"/>
+                <path class="body-line" d="m159 116-35-30-14-43m91 73 35-30 14-43M164 198l-5 21m37-21 5 21"/>
+                <circle class="head" cx="180" cy="74" r="24"/>
+                <path class="face" d="M172 75h1m14 0h1m-14 9q6 6 12 0"/>
+                <g class="tracking-points"><circle cx="110" cy="43" r="6"/><circle cx="124" cy="86" r="5"/><circle cx="159" cy="116" r="5"/><circle cx="250" cy="43" r="6"/><circle cx="236" cy="86" r="5"/><circle cx="201" cy="116" r="5"/></g>
+                <text x="82" y="33">✦</text><text x="264" y="33">✦</text>
+              </svg>
+              <svg class="circle-guide" id="circle-guide" viewBox="0 0 360 220" role="img" aria-label="손으로 원을 따라 돌리는 동작 안내 그림" hidden>
+                <circle class="circle-track" cx="180" cy="114" r="73"/><path class="circle-arrow" d="M118 77a73 73 0 0 1 130 13m-20-6 21 10 8-22"/>
+                <g class="hand-guide"><path d="M170 143v-40q0-9 7-9t7 9v17-34q0-9 7-9t7 9v35-25q0-9 7-9t7 9v29-15q0-8 7-8t7 8v36q0 31-28 31h-11q-17 0-25-15l-16-26q-5-8 2-12t13 4Z"/></g>
+                <circle class="orbit-dot" cx="108" cy="113" r="8"/><text x="179" y="211" text-anchor="middle">화살표를 따라 크게 돌려 주세요</text>
+              </svg>
+              <div class="camera-feedback"><span id="camera-feedback">동작 안내 미리보기</span><span id="progress-number">0%</span></div><div class="progress-track" role="progressbar" aria-label="동작 시연 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="motion-progress"><span id="progress-fill"></span></div>
+            </div>
+            <div class="gesture-instruction"><span class="step-icon">✦</span><div><h3 id="gesture-title">양손을 머리 위로 올려 주세요!</h3><p id="gesture-description">자세를 유지하면 룰렛이 돌아가요.</p></div></div>
+            <button class="button lime full" id="simulate-motion"><svg><use href="#i-spark"/></svg>동작 성공 시연하기<svg><use href="#i-arrow"/></svg></button>
+            <p class="prototype-note">화면 초안에서는 버튼으로 동작 성공을 시연해요.<br>실제 카메라 촬영·모션 인식은 다음 단계에 연결합니다.</p>
+          </section>
+          <button class="button manual-button" id="manual-spin"><svg><use href="#i-play"/></svg>버튼으로 돌리기</button>
+          <p id="draw-error" class="form-message" role="status"></p>
+        </div>
+      </div>
+      <div class="page-bottom"><a href="#setup" class="text-button">← 설계 화면으로</a><span>몸짓 하나로 만드는 특별한 순간 <span aria-hidden="true">✦</span></span></div>
+    </section>
+    <footer class="site-footer"><span>✳ MOTION ROULETTE</span><p>작은 움직임, 커다란 설렘.</p><span>DESIGNED FOR YOUR LUCKY DAY</span></footer>
+  </main>
+  <dialog id="result-dialog" class="result-dialog" aria-labelledby="result-prize" aria-describedby="result-person"><form method="dialog"><button class="dialog-close" aria-label="당첨 결과 닫기">×</button><div class="result-confetti" aria-hidden="true">✦ · ✧ · ✦</div><p class="eyebrow">A LITTLE LUCK, JUST FOR YOU</p><div class="result-medal" aria-hidden="true">✳</div><p id="result-rank" class="result-rank"></p><h2 id="result-prize"></h2><p id="result-person"></p><p class="result-saved"><svg><use href="#i-check"/></svg>당첨 기록과 남은 개수에 반영했어요</p><button class="button primary full" id="next-participant" value="next">다음 주인공 맞이하기<svg><use href="#i-arrow"/></svg></button></form></dialog>
+  <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-heading"><div class="card-heading"><h2 id="history-heading">오늘의 당첨 기록</h2><button class="dialog-close" id="close-history" aria-label="당첨 기록 닫기">×</button></div><div id="history-list"></div><p class="small muted">이 화면 초안의 시연 결과이며 현재 기기에만 저장돼요.</p></dialog>
+</body>
+</html>
