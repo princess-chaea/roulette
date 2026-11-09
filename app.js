@@ -355,7 +355,7 @@
     $('setup-tab').classList.toggle('active', !draw); $('draw-tab').classList.toggle('active', draw);
     $('setup-tab').setAttribute('aria-current', draw ? 'false' : 'page'); $('draw-tab').setAttribute('aria-current', draw ? 'page' : 'false');
     $('draw-event').textContent = state.title.trim() || '우리의 행운이 시작되는 순간';
-    document.title = (draw ? '룰렛 돌리기' : '룰렛 설계') + ' · 모션 룰렛';
+    document.title = '모션 룰렛';
     if (!draw && completedRound) nextParticipant();
   }
   function showHistory() {

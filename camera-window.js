@@ -29,7 +29,14 @@
     const current = view = { popup, frame: 0, observer: null };
     const doc = popup.document;
     doc.documentElement.lang = 'ko';
-    doc.title = '모션 카메라 · 모션 룰렛';
+    doc.title = '모션 룰렛';
+    const originalIcon = document.querySelector('link[rel="icon"]');
+    if (originalIcon) {
+      const favicon = doc.createElement('link');
+      favicon.rel = 'icon'; favicon.type = originalIcon.type;
+      favicon.href = originalIcon.href;
+      doc.head.append(favicon);
+    }
     function element(tag, parent, content = '') {
       const node = doc.createElement(tag);
       node.textContent = content;
