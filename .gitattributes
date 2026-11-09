@@ -1,0 +1,4 @@
+assets/vendor/** -text -whitespace
+assets/fonts/*.ttf -text
+assets/fonts/OFL.txt text eol=lf
+*.png -text
