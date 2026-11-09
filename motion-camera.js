@@ -126,7 +126,7 @@
         if (result.progress > 12) {
           ctx.strokeStyle = '#d5f477'; ctx.lineWidth = width / 90;
           const reverse = result.direction === 'counterclockwise';
-          const amount = (result.progress - 12) / 88 * Math.PI * (reverse ? -1 : 1);
+          const amount = (result.progress - 12) / 88 * Math.PI * 2 * (reverse ? -1 : 1);
           ctx.beginPath(); ctx.ellipse(t.x * width, t.y * height, t.radius * width, t.radiusY * height, 0, 0, amount, reverse); ctx.stroke();
         }
         const grip = result.grip || { x: t.startX, y: t.startY, held: false, progress: 0 };

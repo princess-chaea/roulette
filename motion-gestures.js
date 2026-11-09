@@ -19,8 +19,8 @@
   });
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
   const wrapAngle = angle => Math.atan2(Math.sin(angle), Math.cos(angle));
-  const TURN_ANGLE = Math.PI / 3;
-  const TURN_HINT = '손잡이를 잡고 한쪽으로 쭉 돌려 주세요.';
+  const TURN_ANGLE = Math.PI * 2;
+  const TURN_HINT = '손잡이를 잡고 한 방향으로 한 바퀴 돌려 주세요.';
 
   function visible(point, confidence) {
     return point && Number.isFinite(point.x) && Number.isFinite(point.y) &&
@@ -54,8 +54,8 @@
   }
 
   function targetFor(frame, aspect) {
-    const radius = frame.span * 0.85;
-    return { x: frame.x, y: frame.y, radius, radiusY: radius * aspect, startX: frame.x + radius, startY: frame.y };
+    const radius = Math.min(frame.span * 0.65, 0.185, 0.20 / aspect);
+    return { x: 0.5 - radius, y: 0.5, radius, radiusY: radius * aspect, startX: 0.5, startY: 0.5 };
   }
 
   function wristAt(points, arm) {
@@ -76,24 +76,31 @@
       });
       return extended ? 'both' : null;
     }
+    if (kind === 'arm_heart') {
+      const center = 1 - frame.x;
+      const leftWrist = points[LEFT.wrist], rightWrist = points[RIGHT.wrist];
+      // The wrists can be apart and at different heights when fingertips meet.
+      const handsMeet = Math.abs(leftWrist.x - rightWrist.x) <= frame.span * 0.70 &&
+        Math.abs((leftWrist.x + rightWrist.x) / 2 - center) <= frame.span * 0.45 &&
+        Math.abs(leftWrist.y - rightWrist.y) <= frame.shoulderScale * 0.38;
+      const noseY = points[0].y;
+      const handsHigh = Math.max(leftWrist.y, rightWrist.y) <= noseY + frame.shoulderScale * 0.05 &&
+        (leftWrist.y + rightWrist.y) / 2 <= noseY - frame.shoulderScale * 0.04;
+      const elbowsWide = Math.abs(points[LEFT.elbow].x - points[RIGHT.elbow].x) >= frame.span * 1.02;
+      const bentInward = [LEFT, RIGHT].every(arm => {
+        const shoulder = points[arm.shoulder], elbow = points[arm.elbow], wrist = points[arm.wrist];
+        const outward = Math.sign(shoulder.x - center);
+        return (elbow.x - center) * outward >= frame.span * 0.42 &&
+          (elbow.x - wrist.x) * outward >= frame.span * 0.20 &&
+          elbow.y <= shoulder.y + frame.shoulderScale * 0.22;
+      });
+      return handsMeet && handsHigh && elbowsWide && bentInward ? 'both' : null;
+    }
     const aboveHead = arm => points[arm.wrist].y < points[0].y - frame.height * 0.10 &&
       points[arm.elbow].y <= frame.shoulderY + frame.height * 0.05;
     const leftUp = aboveHead(LEFT), rightUp = aboveHead(RIGHT);
     const wristGap = Math.abs(points[LEFT.wrist].x - points[RIGHT.wrist].x);
     if (kind === 'hands_up') return leftUp && rightUp && wristGap >= frame.span * 0.55 ? 'both' : null;
-    if (kind === 'arm_heart') {
-      const center = 1 - frame.x;
-      const midWristX = (points[LEFT.wrist].x + points[RIGHT.wrist].x) / 2;
-      const handsMeet = wristGap < frame.span * 0.55 && Math.abs(midWristX - center) <= frame.span * 0.35 &&
-        Math.abs(points[LEFT.wrist].y - points[RIGHT.wrist].y) <= frame.height * 0.18;
-      const elbowsWide = Math.abs(points[LEFT.elbow].x - points[RIGHT.elbow].x) >= frame.span * 1.2;
-      const rounded = [LEFT, RIGHT].every(arm => {
-        const shoulder = points[arm.shoulder], elbow = points[arm.elbow], wrist = points[arm.wrist];
-        return (elbow.x - shoulder.x) * Math.sign(shoulder.x - center) > 0 &&
-          elbow.y >= points[0].y - frame.height * 0.30 && elbow.y - wrist.y >= frame.height * 0.08;
-      });
-      return leftUp && rightUp && handsMeet && elbowsWide && rounded ? 'both' : null;
-    }
     if (leftUp && points[RIGHT.wrist].y >= points[0].y) return 'left';
     if (rightUp && points[LEFT.wrist].y >= points[0].y) return 'right';
     return null;
@@ -169,7 +176,11 @@
     }
 
     followPose(points, frame, time) {
-      const seen = [0, 13, 14, 15, 16].every(i => visible(points[i], this.tuning.confidence));
+      // Overhead hands partly overlap; allow a moderately confident wrist
+      // while both elbows, shoulders and nose still meet the usual threshold.
+      const wristConfidence = this.poseKind === 'arm_heart' ? this.tuning.confidence * 0.82 : this.tuning.confidence;
+      const seen = [0, 13, 14].every(i => visible(points[i], this.tuning.confidence)) &&
+        [15, 16].every(i => visible(points[i], wristConfidence));
       const side = seen ? heldPose(this.poseKind, points, frame) : null;
       if (!side) {
         this.poseStart = null;
@@ -199,7 +210,7 @@
         const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: wristAt(points, arm) }))
           .filter(c => c.wrist).sort((a, b) => startDistance(a.wrist) - startDistance(b.wrist));
         if (!candidates.length || startDistance(candidates[0].wrist) > target.radius * 0.34) {
-          return status('한 손을 오른쪽 시작점에 올려 주세요.', 0, { target, ...idleGrip(target) });
+          return status('한 손을 화면 가운데 손잡이에 올려 주세요.', 0, { target, ...idleGrip(target) });
         }
         this.circle = { arm: candidates[0].arm, body: frame, target, startTime: time, angle: null,
           net: 0, direction: 0, furthest: 0, samples: 0, tangent: 0, movingSince: null, lastMotionTime: time };
@@ -212,7 +223,7 @@
       if (arc.angle === null) {
         if (startDistance(wrist) > target.radius * 0.34) return restart('시작점에서 손을 잠시 멈춰 주세요.');
         const held = time - arc.startTime;
-        if (held >= this.tuning.startHoldMs) { arc.angle = angle; arc.origin = wrist; arc.lastMotionTime = time; }
+        if (held >= this.tuning.startHoldMs) { arc.angle = angle; arc.lastMotionTime = time; }
         const progress = arc.angle === null ? held / this.tuning.startHoldMs : 1;
         return status(arc.angle === null ? '시작점에서 손을 잠시 멈춰 주세요.' : TURN_HINT,
           Math.floor(12 * progress), { target, grip: { ...wrist, held: arc.angle !== null, progress }, angleDeg: 0 });
@@ -220,14 +231,15 @@
       const radiusRatio = Math.hypot(dx, dy) / target.radius;
       if (radiusRatio > 2.3) return restart('손잡이를 다시 잡아 주세요.');
       const feedback = { target, grip: { ...wrist, held: true, progress: 1 }, angleDeg: arc.net * 180 / Math.PI };
-      if (radiusRatio < 0.25 || arc.inCenter) {
-        // No rotation is measured inside the hub or across its opposite sides.
-        arc.inCenter = radiusRatio < 0.25;
-        arc.angle = angle;
-        arc.lastMotionTime = time;
+      if (radiusRatio < 0.25) {
+        // Freeze the last reliable angle. Re-entering the ring on a different
+        // side cannot silently reset the angular origin and bank repeated arcs.
+        arc.inCenter = true;
         return status(TURN_HINT, Math.floor(clamp(12 + 88 * Math.abs(arc.net) / TURN_ANGLE, 12, 99)), feedback);
       }
       const step = wrapAngle(angle - arc.angle);
+      if (arc.inCenter && Math.abs(step) > 0.34) return restart('손잡이를 다시 잡아 주세요.');
+      arc.inCenter = false;
       const maxStep = Math.min(1.10, 0.22 + (time - arc.lastMotionTime) * 0.014);
       if (Math.abs(step) > maxStep) return restart('손을 조금 더 천천히 움직여 주세요.');
       if (Math.abs(step) >= 0.012 && arc.movingSince === null) arc.movingSince = arc.lastMotionTime;
@@ -243,12 +255,11 @@
       arc.furthest = Math.max(arc.furthest, sweep);
       if (arc.furthest - sweep > 0.34) return restart('한 방향으로 계속 돌려 주세요.');
       const duration = arc.movingSince === null ? 0 : time - arc.movingSince;
-      if (duration > 4500) return restart('오른쪽 시작점에서 다시 돌려 주세요.');
+      if (duration > 12000) return restart('가운데 손잡이를 다시 잡아 주세요.');
       feedback.angleDeg = arc.net * 180 / Math.PI;
       if (arc.direction) feedback.direction = arc.direction > 0 ? 'clockwise' : 'counterclockwise';
-      const displacement = Math.hypot(wrist.x - arc.origin.x, (wrist.y - arc.origin.y) / aspect) / target.radius;
-      if (sweep >= TURN_ANGLE - 1e-6 && arc.samples >= 3 && duration >= 200 &&
-          displacement >= 0.45 && arc.tangent * arc.direction >= 0.45) {
+      if (sweep >= TURN_ANGLE - 1e-6 && arc.samples >= 8 && duration >= 450 &&
+          arc.tangent * arc.direction >= TURN_ANGLE * 0.25) {
         return status('성공! 룰렛이 돌아갑니다.', 100, { ...feedback, matched: true, speed: sweep * 1000 / duration });
       }
       return status(TURN_HINT, Math.floor(clamp(12 + 88 * sweep / TURN_ANGLE, 12, 99)), feedback);

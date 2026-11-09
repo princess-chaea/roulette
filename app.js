@@ -202,8 +202,8 @@
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
     $('live-guide').hidden = !camera?.running || mode === 'presence';
-    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '노란 손잡이를 잡고 룰렛을 돌려요!';
-    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '손잡이에 손을 잠시 멈추고, 잡히면 한쪽으로 넓게 끌어 돌려 주세요.';
+    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '가운데 손잡이를 잡고 한 바퀴 돌려요!';
+    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '화면 가운데 손잡이에 손을 잠시 멈추고, 잡히면 한 방향으로 한 바퀴 돌려 주세요.';
   }
   function setProgress(percent, message) {
     $('progress-fill').style.width = percent + '%'; $('progress-number').textContent = percent + '%';
@@ -401,6 +401,7 @@
   });
   window.addEventListener('camera-window-change', event => {
     document.body.classList.toggle('dual-monitor', event.detail.open);
+    if (!event.detail.open) $('display-message').textContent = '';
     camera.setAnimationHost(CameraWindow.getWindow() || globalThis);
     $('open-camera-window').textContent = event.detail.open ? '카메라 창 보기' : '카메라 새 창';
   });

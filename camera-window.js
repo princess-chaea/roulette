@@ -61,6 +61,12 @@
       progress { width: 100%; height: 8px; accent-color: #6d914c; }
       nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 17rem; }
       button { border: 1px solid #c9d8c2; border-radius: 8px; background: #fff; color: #193b32; font: 700 15px KERISBaeum,sans-serif; padding: .6em .85em; cursor: pointer; }
+      .result { border:0; border-radius:28px; padding:clamp(24px,5vw,52px); width:min(90vw,620px); text-align:center; color:#193b32; background:#fff; box-shadow:0 20px 80px #0005; max-height:92dvh; overflow:auto; }
+      .result::backdrop { background:#122b2488; backdrop-filter:blur(8px); }
+      .result img { display:block; width:clamp(140px,24vh,240px); height:clamp(140px,24vh,240px); object-fit:contain; margin:0 auto 12px; }
+      .result h2 { font:700 clamp(28px,4vw,48px)/1.3 SchoolPoster,KERISBaeum,sans-serif; margin:12px 0 28px; overflow-wrap:anywhere; }
+      .result .rank { color:#6b8758; font-weight:700; font-size:clamp(18px,2.5vw,26px); }
+      .result button { width:100%; background:#173d35; color:white; border:0; padding:18px; font-size:20px; }
       @media (max-width: 650px) { footer { grid-template-columns: auto 1fr; } nav { grid-column: 1/-1; max-width: none; } }
     `);
 
@@ -95,9 +101,29 @@
     doc.addEventListener('fullscreenchange', () => { fullscreen.textContent = doc.fullscreenElement ? '전체화면 해제' : '전체화면'; });
     element('button', controls, '창 닫기').onclick = close;
 
+    const result = element('dialog', doc.body);
+    result.className = 'result';
+    result.setAttribute('aria-labelledby', 'camera-result-prize');
+    const resultArt = element('img', result);
+    const resultRank = element('p', result); resultRank.className = 'rank';
+    const resultPrize = element('h2', result); resultPrize.id = 'camera-result-prize';
+    element('button', result, '확인').onclick = () => source('result-dialog').close();
+    result.addEventListener('close', () => { if (source('result-dialog').open) source('result-dialog').close(); });
+    function syncResult() {
+      const original = source('result-dialog');
+      if (original.open) {
+        const art = original.querySelector('.result-art');
+        if (resultArt.src !== art.src) resultArt.src = art.src;
+        resultArt.alt = art.alt;
+        resultRank.textContent = source('result-rank').textContent;
+        resultPrize.textContent = source('result-prize').textContent;
+        if (!result.open) result.showModal();
+      } else if (result.open) result.close();
+    }
     const video = source('camera-video');
     const overlay = source('tracking-overlay');
     function syncInstructions() {
+      syncResult();
       title.textContent = source('gesture-title').textContent;
       description.textContent = source('gesture-description').textContent;
       feedback.textContent = source('camera-error').textContent || source('camera-feedback').textContent;
@@ -110,6 +136,7 @@
     }
     current.observer = new MutationObserver(syncInstructions);
     current.observer.observe(source('camera-preview').closest('.camera-card'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'src', 'disabled', 'aria-valuenow'] });
+    current.observer.observe(source('result-dialog'), { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['open','src','alt'] });
     syncInstructions();
 
     function render() {

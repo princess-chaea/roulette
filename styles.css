@@ -49,3 +49,14 @@ body.roulette-fullscreen .draw-heading,body.roulette-fullscreen .site-footer,bod
 body.roulette-fullscreen .display-actions{margin:12px 0}body.roulette-fullscreen .draw-wheel-card{padding-top:14px}
 
 button.organization{border:0;cursor:pointer;appearance:none;font:inherit;transition:background-color .2s}button.organization.first-prize-armed{background:#f9e2e0;border-radius:12px}button.organization:focus-visible{outline:2px solid #809d69;outline-offset:4px}
+
+@media(max-width:800px){
+  .site-header{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:12px 8px;align-items:center}
+  .site-header .brand{order:1;min-width:0;gap:6px}
+  .site-header .brand-wheel{width:clamp(28px,8vw,44px);height:clamp(28px,8vw,44px);flex-shrink:0}
+  .site-header .brand>span{font-size:clamp(16px,4.6vw,24px);letter-spacing:-.7px}
+  .site-header .brand small{font-size:clamp(5px,1.5vw,8px);letter-spacing:1px}
+  .site-header .organization{order:2;min-width:0;width:100%;max-width:100%;margin:0;padding:4px;justify-self:end}
+  .site-header .organization img{width:100%;max-width:260px;margin-left:auto}
+  .site-header .page-tabs{grid-column:1/-1;order:3;width:100%}
+}

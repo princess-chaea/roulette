@@ -77,16 +77,18 @@ function circleSession(aspect = 16 / 9) {
   return { detector, sample, hold, target };
 }
 
-test('after grabbing, sixty degrees match in either direction of the mirrored preview', () => {
+test('the centered handle requires one complete turn in either direction of the mirrored preview', () => {
   for (const sign of [1, -1]) {
     const { hold, sample, target } = circleSession();
+    assert.equal(target.startX, 0.5);
+    assert.equal(target.startY, 0.5);
     assert.ok(Math.abs(target.radiusY - target.radius * 16 / 9) < 1e-9);
     hold();
     let result;
-    for (let i = 1; i <= 4; i++) {
+    for (let i = 1; i <= 24; i++) {
       result = sample(sign * i * Math.PI / 12, 1, 15, i % 2 === 0 ? 50 : 105);
       assert.equal(result.direction, sign === 1 ? 'clockwise' : 'counterclockwise');
-      if (i < 4) assert.equal(result.matched, false);
+      if (i < 24) assert.equal(result.matched, false);
     }
     assert.equal(result.matched, true);
     assert.equal(result.progress, 100);
@@ -98,7 +100,7 @@ test('after grabbing, sixty degrees match in either direction of the mirrored pr
 
 test('a fast start without the initial hold cannot trigger', () => {
   const { sample } = circleSession();
-  for (let i = 0; i <= 12; i++) assert.equal(sample(i * Math.PI / 12).matched, false);
+  for (let i = 0; i <= 24; i++) assert.equal(sample(i * Math.PI / 12).matched, false);
 });
 
 test('the grip fills before locking and reports actual mirrored wrist position and signed rotation', () => {
@@ -137,7 +139,17 @@ test('wrist jitter and a diameter crossing cannot complete the arc', () => {
   }
 });
 
-test('a broad one-wrist drag works with no visible elbows and a briefly hidden opposite shoulder', () => {
+test('partial sweeps connected through the center never add up to a turn', () => {
+  const { sample, hold } = circleSession();
+  hold();
+  for (let repeat = 0; repeat < 14; repeat++) {
+    for (const [angle, radius] of [[0, 1], [0.18, 1], [0.38, 1], [0.55, 1], [0, 0]]) {
+      assert.equal(sample(angle, radius).matched, false);
+    }
+  }
+});
+
+test('an uneven full circle works with one wrist, no visible elbows and a briefly hidden opposite shoulder', () => {
   const flow = new MotionFlow();
   const aspect = 16 / 9;
   let r;
@@ -154,12 +166,13 @@ test('a broad one-wrist drag works with no visible elbows and a briefly hidden o
   }
   for (let t = 3100; t <= 3400; t += 100) r = track(0, 1, t, false);
   assert.equal(r.grip.held, true);
-  for (const [i, radius] of [0.55, 0.85, 1.5, 1.6].entries()) {
-    r = track(15 * (i + 1), radius, 3470 + 70 * i, true);
+  const radii = [0.55, 0.85, 1.5, 1.6];
+  for (let i = 0; i < 24; i++) {
+    r = track(15 * (i + 1), radii[i % 4], 3470 + 70 * i, i < 4);
     assert.equal(r.mode, 'circle');
-    assert.equal(r.matched, i === 3);
+    assert.equal(r.matched, i === 23);
   }
-  assert.ok(Math.abs(r.angleDeg - 60) < 1e-8);
+  assert.ok(Math.abs(r.angleDeg - 360) < 1e-8);
 });
 
 test('the cached shoulder cannot bridge a different person or more than 500ms, and a lost wrist releases the grip', () => {
@@ -191,7 +204,7 @@ test('a partial arc cannot be completed after switching wrists, reversing, telep
     if (interruption === 'jump') sample(Math.PI);
     if (interruption === 'delay') sample(Math.PI / 2, 1, 15, 500);
     const wrist = interruption === 'switch' ? 16 : 15;
-    for (let i = 4; i <= 8; i++) assert.equal(sample(i * Math.PI / 12, 1, wrist).matched, false);
+    for (let i = 4; i <= 24; i++) assert.equal(sample(i * Math.PI / 12, 1, wrist).matched, false);
   }
 });
 
@@ -276,6 +289,22 @@ test('hands hanging by the waist, crossed arms, and one extended arm are not an 
   }
 });
 
+test('a tilted overhead heart holds with separated wrists and unequal elbow heights as hips enter the frame', () => {
+  for (const aspect of [1, 16 / 9]) {
+    const detector = new GestureDetector({ poseKind: 'arm_heart' });
+    for (let time = 0; time <= 1000; time += 100) {
+      const p = starter('arm_heart');
+      p[15] = point(0.57, 0.25 + 0.004 * aspect); p[16] = point(0.445, 0.25 - 0.05 * aspect);
+      p[16].visibility = 0.48;
+      p[13] = point(0.63, 0.38 + 0.03 * aspect); p[14] = point(0.39, 0.25 - 0.08 * aspect);
+      if (time % 200 === 0) { p[23] = point(0.57, 0.70); p[24] = point(0.43, 0.70); }
+      const result = detector.update(p, time, aspect);
+      assert.equal(result.progress, time / 10);
+      assert.equal(result.matched, time === 1000);
+    }
+  }
+});
+
 test('heart needs wide elbows and upper centered hands; a finger heart or tightly folded arms do not qualify', () => {
   for (const change of ['elbows in', 'hands beside head', 'hands in front of chest', 'elbows missing']) {
     const points = starter('arm_heart');
@@ -339,10 +368,10 @@ test('the full sequence recognizes an upper-body-only participant and returns on
   for (let i = 0; i < 6; i++, time += 65) {
     assert.equal(flow.update(wristAt(0), time, aspect).matched, false);
   }
-  for (let i = 1; i <= 4; i++, time += 65) {
+  for (let i = 1; i <= 24; i++, time += 65) {
     result = flow.update(wristAt(-Math.PI * i / 12), time, aspect);
     assert.equal(result.mode, 'circle');
-    assert.equal(result.matched, i === 4);
+    assert.equal(result.matched, i === 24);
   }
   assert.equal(result.direction, 'counterclockwise');
   assert.equal(flow.update(wristAt(-Math.PI), time, aspect).matched, false);
