@@ -116,7 +116,8 @@
     }
 
     reset() {
-      this.poseStart = null;
+      this.poseHeldMs = 0;
+      this.lastPoseTime = null;
       this.heldSide = null;
       this.circle = null;
       this.previousBody = null;
@@ -124,6 +125,24 @@
       this.lastTime = null;
       this.done = false;
       this.lastResult = status('카메라에 상체를 보여 주세요.', 0, idleGrip());
+    }
+
+    interrupt(message) {
+      if (!this.tuning.retainProgress) this.reset();
+      else {
+        this.lastPoseTime = null;
+        this.lastTime = null;
+        this.previousBody = null;
+        this.lastVisibleBody = null;
+        if (this.circle?.angle != null) this.circle.rebase = true;
+        else if (this.circle) {
+          this.circle = null;
+          const target = this.lastResult.target;
+          this.lastResult = status(message, 0, { target, ...idleGrip(target) });
+        }
+      }
+      this.lastResult = { ...this.lastResult, message, matched: false };
+      return this.lastResult;
     }
 
     setMode(mode) {
@@ -156,18 +175,18 @@
     update(landmarks, timestampMs, aspectRatio = 1) {
       if (this.done) return { ...this.lastResult, matched: false };
       if (!Number.isFinite(timestampMs) || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
-        this.reset();
-        return this.lastResult;
+        return this.interrupt('카메라에 상체를 보여 주세요.');
       }
       const measured = bodyFrame(landmarks, aspectRatio, this.tuning.confidence);
       const frame = measured ?? this.cachedFrame(landmarks, timestampMs, aspectRatio);
       if (!frame) {
-        this.reset();
-        return status('얼굴과 양쪽 어깨가 화면에 보이도록 해 주세요.', 0, idleGrip());
+        return this.interrupt('얼굴과 양쪽 어깨가 화면에 보이도록 해 주세요.');
       }
       if (timestampMs === this.lastTime) return { ...this.lastResult, matched: false };
       const gap = this.lastTime === null ? 0 : timestampMs - this.lastTime;
-      if (gap < 0 || gap > this.tuning.maxFrameGapMs || discontinuous(this.previousBody, frame, aspectRatio)) this.reset();
+      if (gap < 0 || gap > this.tuning.maxFrameGapMs || discontinuous(this.previousBody, frame, aspectRatio)) {
+        this.interrupt('다시 보이는 위치에서 이어서 진행해요.');
+      }
       this.previousBody = frame;
       if (measured) this.lastVisibleBody = { frame, time: timestampMs, points: landmarks };
       this.lastTime = timestampMs;
@@ -188,19 +207,22 @@
         [15, 16].every(i => visible(points[i], wristConfidence));
       const side = seen ? heldPose(this.poseKind, points, frame) : null;
       if (!side) {
-        this.poseStart = null;
-        this.heldSide = null;
-        return status(seen ? POSE_HINTS[this.poseKind] : (shoulderPose ? '얼굴과 어깨, 양손이 화면에 보이도록 해 주세요.' : '얼굴과 양팔이 화면 안에 오도록 해 주세요.'));
+        this.lastPoseTime = null;
+        if (!this.tuning.retainProgress) { this.heldSide = null; this.poseHeldMs = 0; }
+        return status(seen ? POSE_HINTS[this.poseKind] : (shoulderPose ? '얼굴과 어깨, 양손이 화면에 보이도록 해 주세요.' : '얼굴과 양팔이 화면 안에 오도록 해 주세요.'),
+          Math.floor(100 * this.poseHeldMs / this.tuning.poseHoldMs));
       }
-      if (side !== this.heldSide) { this.heldSide = side; this.poseStart = time; }
-      const elapsed = time - this.poseStart;
-      if (elapsed >= this.tuning.poseHoldMs) return status('자세를 확인했어요.', 100, { matched: true });
-      return status('좋아요, 지금 자세를 유지해 주세요.', Math.floor(100 * elapsed / this.tuning.poseHoldMs));
+      if (side !== this.heldSide) { this.heldSide = side; this.poseHeldMs = 0; }
+      else if (this.lastPoseTime !== null) this.poseHeldMs += time - this.lastPoseTime;
+      this.lastPoseTime = time;
+      if (this.poseHeldMs >= this.tuning.poseHoldMs) return status('자세를 확인했어요.', 100, { matched: true });
+      return status('좋아요, 지금 자세를 유지해 주세요.', Math.floor(100 * this.poseHeldMs / this.tuning.poseHoldMs));
     }
 
     spinCircle(points, frame, time, aspect) {
       const target = this.circle?.target ?? targetFor(frame, aspect);
       const restart = message => {
+        if (this.tuning.retainProgress && this.circle?.angle != null) return this.interrupt(message);
         this.circle = null;
         const next = targetFor(frame, aspect);
         return status(message, 0, { target: next, ...idleGrip(next) });
@@ -209,7 +231,7 @@
           target.y - target.radiusY < 0 || target.y + target.radiusY > 1) {
         return restart('안내 원 전체가 보이도록 조금 뒤로 물러나 주세요.');
       }
-      if (this.circle && discontinuous(this.circle.body, frame, aspect)) return restart('몸을 가운데 두고 다시 준비해 주세요.');
+      if (this.circle && !this.circle.rebase && discontinuous(this.circle.body, frame, aspect)) return restart('몸을 가운데 두고 다시 준비해 주세요.');
       const startDistance = wrist => Math.hypot(wrist.x - target.startX, (wrist.y - target.startY) / aspect);
       if (!this.circle) {
         const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: wristAt(points, arm) }))
@@ -222,6 +244,23 @@
       }
       const arc = this.circle;
       const wrist = wristAt(points, arc.arm);
+      if (!wrist && this.tuning.retainProgress && arc.angle !== null) {
+        return this.interrupt('같은 손이 다시 보이면 이어서 돌려 주세요.');
+      }
+      if (arc.rebase) {
+        if (!wrist) return this.interrupt('같은 손이 다시 보이면 이어서 돌려 주세요.');
+        const dx = wrist.x - target.x, dy = (wrist.y - target.y) / aspect;
+        const radiusRatio = Math.hypot(dx, dy) / target.radius;
+        if (radiusRatio < 0.15 || radiusRatio > 3.2) return this.interrupt('손을 안내 원 가까이 가져와 주세요.');
+        // A returning wrist establishes a new reference angle. Only subsequent
+        // motion can advance the retained turn, even after a long camera gap.
+        if (arc.movingSince !== null) arc.movingSince += time - arc.lastMotionTime;
+        arc.rebase = arc.inCenter = arc.wristMissing = false;
+        arc.body = frame;
+        arc.angle = Math.atan2(dy, dx);
+        arc.lastWristTime = arc.lastMotionTime = time;
+        return { ...this.lastResult, matched: false, message: TURN_HINT, grip: { ...wrist, held: true, progress: 1 } };
+      }
       if (!wrist || arc.wristMissing) {
         if (arc.angle === null || time - arc.lastWristTime > WRIST_GRACE_MS) return restart('처음 올린 손이 화면에 보이도록 해 주세요.');
         if (!wrist) {
@@ -259,6 +298,7 @@
       // Freeze progress across a tracking gap. A wrist returning backwards
       // still unwinds the turn, so repeated short arcs cannot bank a full lap.
       if (rejoined && step * arc.direction >= 0) step = 0;
+      if (arc.direction && arc.furthest - (arc.net + step) * arc.direction > 1.2) return restart('한 방향으로 계속 돌려 주세요.');
       if (Math.abs(step) >= 0.012 && arc.movingSince === null) arc.movingSince = arc.lastMotionTime;
       arc.angle = angle;
       arc.lastMotionTime = time;
@@ -269,9 +309,8 @@
       }
       const sweep = arc.net * arc.direction;
       arc.furthest = Math.max(arc.furthest, sweep);
-      if (arc.furthest - sweep > 1.2) return restart('한 방향으로 계속 돌려 주세요.');
       const duration = arc.movingSince === null ? 0 : time - arc.movingSince;
-      if (duration > 12000) return restart('가운데 손잡이를 다시 잡아 주세요.');
+      if (!this.tuning.retainProgress && duration > 12000) return restart('가운데 손잡이를 다시 잡아 주세요.');
       feedback.angleDeg = arc.net * 180 / Math.PI;
       if (arc.direction) feedback.direction = arc.direction > 0 ? 'clockwise' : 'counterclockwise';
       if (sweep >= TURN_ANGLE - 1e-6 && arc.samples >= 4 && duration >= 250) {
@@ -284,7 +323,7 @@
   class MotionFlow {
     constructor(options = {}) {
       this.tuning = { ...DEFAULTS, ...options };
-      this.detector = new GestureDetector(this.tuning);
+      this.detector = new GestureDetector({ ...this.tuning, retainProgress: true });
       this.reset();
     }
 
@@ -312,13 +351,20 @@
         ? bodyFrame(points, aspect, this.tuning.confidence) ?? this.detector.cachedFrame(points, time, aspect) : null;
       if (!frame || frame.x < 0.25 || frame.x > 0.75 || frame.span < 0.08 || frame.span > 0.65 ||
           points[0].y < 0.05 || points[0].y > 0.60) {
-        this.reset();
+        if (this.mode === 'presence') this.reset();
+        else {
+          this.lastTime = null;
+          this.previousBody = null;
+          const paused = this.detector.interrupt('다시 화면 가운데로 오면 이어서 진행해요.');
+          this.lastResult = { ...paused, mode: this.mode };
+        }
         return this.lastResult;
       }
       const gap = this.lastTime === null ? 0 : time - this.lastTime;
       if (gap < 0 || gap > this.tuning.maxFrameGapMs || discontinuous(this.previousBody, frame, aspect) ||
           (this.mode === 'presence' && discontinuous(this.anchor, frame, aspect))) {
-        this.reset();
+        if (this.mode === 'presence') this.reset();
+        else this.detector.interrupt('다시 보이는 위치에서 이어서 진행해요.');
       }
       if (time === this.lastTime) return { ...this.lastResult, matched: false };
       this.lastTime = time;

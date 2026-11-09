@@ -90,6 +90,16 @@
     const controls = element('nav', footer);
     const connect = element('button', controls);
     connect.onclick = () => source('connect-camera').click();
+    const restart = element('button', controls);
+    restart.setAttribute('aria-label', '카메라와 동작 인식 새로 시작');
+    restart.title = '카메라와 동작 인식 새로 시작';
+    const refreshSvg = source('restart-camera').querySelector('svg').cloneNode(true);
+    // Inline the icon path because SVG use cannot reliably reference another window.
+    const refreshPath = source('i-refresh').firstElementChild.cloneNode(true);
+    refreshSvg.replaceChildren(refreshPath); refreshSvg.setAttribute('viewBox', '0 0 24 24');
+    refreshSvg.style.cssText = 'width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;display:block';
+    restart.append(doc.importNode(refreshSvg, true));
+    restart.onclick = () => source('restart-camera').click();
     const fullscreen = element('button', controls, '전체화면');
     fullscreen.hidden = !doc.fullscreenEnabled;
     fullscreen.onclick = async () => {
@@ -132,6 +142,7 @@
       if (guide.src !== guideUrl) guide.src = guideUrl;
       connect.textContent = source('camera-button-label').textContent;
       connect.disabled = source('connect-camera').disabled;
+      restart.disabled = source('restart-camera').disabled;
       waiting.textContent = source('camera-status').textContent === '준비 중' ? '카메라를 준비하고 있어요…' : '카메라를 연결해 주세요.';
     }
     current.observer = new MutationObserver(syncInstructions);

@@ -216,6 +216,7 @@
   function updateControls() {
     const disabled = busy || completedRound || !!getError();
     $('manual-spin').disabled = disabled;
+    $('restart-camera').disabled = busy || !!camera?.connecting;
     $('show-history').disabled = busy;
     $('draw-tab').setAttribute('aria-disabled', String(busy));
     $('setup-tab').setAttribute('aria-disabled', String(busy));
@@ -358,7 +359,7 @@
     if (!draw && completedRound) nextParticipant();
   }
   function showHistory() {
-    disarmMotion(); updateControls(); setProgress(0, '기록을 닫으면 준비 위치를 다시 확인해요.');
+    updateControls(); setProgress(camera?.detector.lastResult.progress || 0, '기록을 닫으면 이어서 진행해요.');
     const list = $('history-list'); list.replaceChildren();
     if (!state.history.length) list.append(el('p', 'empty-history', '아직 당첨 기록이 없어요.\n첫 번째 행운의 주인공을 만나 보세요!'));
     state.history.slice().reverse().forEach((entry, i) => {
@@ -376,7 +377,8 @@
     $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
   }
   function followGrip(result) {
-    if (result.mode !== 'circle' || !result.grip?.held || !Number.isFinite(result.angleDeg)) { restoreGripPreview(); return; }
+    if (result.mode !== 'circle') { restoreGripPreview(); return; }
+    if (!Number.isFinite(result.angleDeg) || (!result.grip?.held && gripRotationBase === null)) return;
     if (gripRotationBase === null) gripRotationBase = rotation;
     rotation = gripRotationBase + result.angleDeg;
     $('draw-wheel').style.transition = reducedMotion.matches ? 'none' : 'transform 90ms linear';
@@ -440,6 +442,11 @@
     const label = full ? '전체화면 종료' : '룰렛 전체화면';
     $('roulette-fullscreen').setAttribute('aria-label', label); $('roulette-fullscreen').title = label;
   });
+  $('restart-camera').addEventListener('click', () => {
+    if (busy || camera.connecting) return;
+    camera.dispose();
+    camera.start();
+  });
   $('connect-camera').addEventListener('click', () => {
     if (camera.running || camera.connecting) camera.stop(); else camera.start();
   });
@@ -456,7 +463,10 @@
   $('manual-spin').addEventListener('click', () => spin());
   $('show-history').addEventListener('click', showHistory);
   $('close-history').addEventListener('click', () => $('history-dialog').close());
-  $('history-dialog').addEventListener('close', resetAutoMotion);
+  $('history-dialog').addEventListener('close', () => {
+    const result = camera?.detector.lastResult;
+    if (result) setProgress(result.progress, result.message);
+  });
   $('result-dialog').addEventListener('close', nextParticipant);
   $('reset-sample').addEventListener('click', () => {
     if (!confirm('설정과 당첨 기록을 지우고 예시로 다시 채울까요?')) return;

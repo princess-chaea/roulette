@@ -439,23 +439,76 @@ test('the full sequence recognizes an upper-body-only participant and returns on
   assert.equal(flow.update(upperBody(), time + 65, aspect).mode, 'presence');
 });
 
-test('tracking loss, another person, leaving center, a position jump, or a gap require presence again', () => {
-  for (const interruption of ['missing', 'multiple', 'outside', 'jump', 'gap']) {
-    const flow = new MotionFlow();
-    for (let t = 0; t <= 3000; t += 100) flow.update(upperBody(true), t);
-    assert.equal(flow.mode, 'circle');
-    let points = upperBody(true);
+test('presence must be continuous only until the first two seconds have completed', () => {
+  const flow = new MotionFlow();
+  for (let t = 0; t <= 1700; t += 100) flow.update(upperBody(true), t);
+  assert.equal(flow.update(null, 1800).progress, 0);
+  for (let t = 1900; t < 3900; t += 100) assert.equal(flow.update(upperBody(true), t).mode, 'presence');
+  assert.equal(flow.update(upperBody(true), 3900).mode, 'pose');
+});
+
+test('a confirmed pose pauses on tracking loss and counts only observed, valid hold intervals', () => {
+  const flow = new MotionFlow();
+  let result;
+  for (let t = 0; t <= 2700; t += 100) result = flow.update(upperBody(true), t);
+  assert.equal(result.mode, 'pose');
+  assert.equal(result.progress, 70);
+  for (const [points, time] of [[null, 2800], [[upperBody(), upperBody()], 8000],
+    [upperBody(false), 22000], [upperBody(true), 30000]]) {
+    result = flow.update(points, time);
+    assert.equal(result.mode, 'pose');
+    assert.equal(result.progress, 70);
+    assert.equal(result.matched, false);
+  }
+  assert.equal(flow.update(upperBody(true), 30200).progress, 90);
+  assert.equal(flow.update(upperBody(true), 30300).mode, 'circle');
+  flow.reset();
+  assert.equal(flow.update(upperBody(true), 30400).mode, 'presence');
+  assert.equal(flow.lastResult.progress, 0);
+});
+
+test('an interrupted crank retains the stage and signed rotation until visible movement completes it once', () => {
+  for (const sign of [1, -1]) for (const interruption of ['missing', 'multiple', 'outside', 'jump', 'gap', 'wrist']) {
+    const flow = new MotionFlow(), aspect = 16 / 9;
+    let result;
+    for (let t = 0; t <= 3000; t += 100) result = flow.update(upperBody(true), t, aspect);
+    const target = result.target;
+    function wristAt(degrees) {
+      const p = upperBody(), angle = degrees * Math.PI / 180;
+      p[15] = point(1 - target.x - target.radius * Math.cos(angle), target.y + target.radiusY * Math.sin(angle));
+      return p;
+    }
+    let time = 3000;
+    const sample = degrees => flow.update(wristAt(degrees), time += 100, aspect);
+    for (let i = 0; i < 4; i++) sample(0);
+    for (let degrees = 30; degrees <= 90; degrees += 30) result = sample(sign * degrees);
+    assert.equal(result.grip.held, true);
+    const { progress, angleDeg } = result;
+    let points = wristAt(sign * 200);
     if (interruption === 'missing') points = null;
     if (interruption === 'multiple') points = [upperBody(), upperBody()];
     if (interruption === 'outside' || interruption === 'jump') {
-      const shift = interruption === 'outside' ? 0.30 : 0.15;
-      points.forEach(p => { if (p) p.x += shift; });
+      points.forEach(p => { if (p) p.x += interruption === 'outside' ? .30 : .15; });
     }
-    const time = interruption === 'gap' ? 3500 : 3100;
-    const stopped = flow.update(points, time);
-    assert.equal(stopped.mode, 'presence');
-    assert.equal(stopped.progress, 0);
-    assert.equal(stopped.matched, false);
-    for (let t = time + 100; t <= time + 1900; t += 100) assert.equal(flow.update(upperBody(true), t).mode, 'presence');
+    if (interruption === 'wrist') points[15] = null;
+    time += interruption === 'gap' ? 20000 : 100;
+    result = flow.update(points, time, aspect);
+    assert.equal(result.mode, 'circle', interruption);
+    assert.equal(result.progress, progress, interruption);
+    assert.equal(result.angleDeg, angleDeg, interruption);
+    assert.equal(result.matched, false, interruption);
+
+    // Moving while unobserved must never contribute an arc or a match.
+    time += 30000;
+    result = sample(sign * 235);
+    assert.equal(result.progress, progress);
+    assert.equal(result.angleDeg, angleDeg);
+    for (let advance = 30; advance <= 210; advance += 30) {
+      result = sample(sign * (235 + advance));
+      assert.equal(result.matched, advance === 210, interruption);
+    }
+    assert.equal(sample(0).matched, false);
+    flow.reset();
+    assert.equal(sample(0).mode, 'presence');
   }
 });
