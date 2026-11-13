@@ -39,13 +39,9 @@
     const shoulderY = (left.y + right.y) / 2;
     const span = Math.hypot(left.x - right.x, (left.y - right.y) / aspect);
     if (span < 0.045 || nose.y >= shoulderY) return null;
-    // A chest-up camera view is sufficient. Visible hips refine the guide position.
+    // Keep the same reference scale when the lower body enters or leaves the image.
     const shoulderScale = span * aspect;
-    let height = clamp((shoulderY - nose.y) * 2.7, shoulderScale * 0.7, shoulderScale * 2);
-    if ([23, 24].every(i => visible(points[i], confidence))) {
-      const measured = (points[23].y + points[24].y) / 2 - shoulderY;
-      if (measured > shoulderScale * 0.35 && measured < shoulderScale * 2.5) height = measured;
-    }
+    const height = clamp((shoulderY - nose.y) * 2.7, shoulderScale * 0.7, shoulderScale * 2);
     return { x, y: shoulderY + height * 0.20, span, shoulderScale, shoulderY, height };
   }
 

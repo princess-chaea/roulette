@@ -308,6 +308,36 @@ test('each starter pose accepts its own one-second hold and rejects every other 
   }
 });
 
+test('the same upper-body motion yields identical progress as hips and knees enter or leave view', () => {
+  for (const kind of POSE_KINDS) {
+    const flows = ['cropped', 'visible', 'intermittent'].map(() => new MotionFlow({ poseKind: kind }));
+    let result;
+    for (let step = 0; step <= 44; step++) {
+      const p = starter(kind);
+      if (kind === 'hands_up' || kind === 'one_hand_up') p[15].y = 0.21;
+      if (kind === 'hands_up') p[16].y = 0.21;
+      if (step > 30) {
+        const { target } = result;
+        const angle = Math.max(0, step - 34) * Math.PI / 6;
+        const wrist = kind === 'hands_near_shoulders' ? 16 : 15;
+        p[wrist] = point(1 - target.x - target.radius * Math.cos(angle), target.y + target.radiusY * Math.sin(angle));
+      }
+      const extended = p.slice();
+      extended[23] = point(0.57, 0.88); extended[24] = point(0.43, 0.88);
+      extended[25] = point(0.56, 0.99); extended[26] = point(0.44, 0.99);
+      const inputs = [p, extended, step % 2 ? extended : p];
+      const frames = flows.map((flow, index) => flow.update(inputs[index], step * 100, 16 / 9));
+      result = frames[0];
+      assert.deepEqual(frames[1], result, kind);
+      assert.deepEqual(frames[2], result, kind);
+      if (step === 20) assert.equal(result.mode, 'pose');
+      if (step === 30) assert.equal(result.mode, 'circle');
+      if (step === 39) assert.ok(result.progress > 0 && result.progress < 100);
+    }
+    assert.equal(result.matched, true, kind);
+  }
+});
+
 test('either hand can be raised for a one-hand pose, but switching sides restarts the hold', () => {
   const detector = new GestureDetector({ poseKind: 'one_hand_up' });
   for (let t = 0; t <= 800; t += 100) detector.update(starter('one_hand_up'), t);

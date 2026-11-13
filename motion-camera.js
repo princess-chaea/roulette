@@ -130,6 +130,25 @@
           const amount = (result.progress - 12) / 88 * Math.PI * 2 * (reverse ? -1 : 1);
           ctx.beginPath(); ctx.ellipse(t.x * width, t.y * height, t.radius * width, t.radiusY * height, 0, 0, amount, reverse); ctx.stroke();
         }
+        // Before movement show both supported directions; once turning, retain
+        // only the participant's chosen direction. The popup shares this canvas.
+        ctx.save(); ctx.strokeStyle = '#fff9c9'; ctx.fillStyle = '#fff9c9';
+        ctx.lineWidth = Math.max(3, width / 160); ctx.shadowColor = '#173d35'; ctx.shadowBlur = 5;
+        const arrowRadius = t.radius * width * 1.13;
+        const arrow = (start, end, reverse) => {
+          ctx.beginPath(); ctx.arc(t.x * width, t.y * height, arrowRadius, start, end, reverse); ctx.stroke();
+          const tipX = t.x * width + Math.cos(end) * arrowRadius, tipY = t.y * height + Math.sin(end) * arrowRadius;
+          const heading = end + (reverse ? -1 : 1) * Math.PI / 2, size = Math.max(11, width / 38);
+          ctx.beginPath(); ctx.moveTo(tipX, tipY);
+          ctx.lineTo(tipX - Math.cos(heading - .48) * size, tipY - Math.sin(heading - .48) * size);
+          ctx.lineTo(tipX - Math.cos(heading + .48) * size, tipY - Math.sin(heading + .48) * size);
+          ctx.closePath(); ctx.fill();
+        };
+        if (result.direction !== 'counterclockwise') arrow(-Math.PI * .92, -Math.PI * .15, false);
+        if (result.direction !== 'clockwise') arrow(Math.PI * .92, Math.PI * .15, true);
+        ctx.font = `bold ${Math.max(12, width / 40)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
+        ctx.fillText(result.direction ? '이 방향으로 계속 돌려요' : '어느 방향이든 한 바퀴!', t.x * width, t.y * height + arrowRadius + width / 28);
+        ctx.restore();
         const grip = result.grip || { x: t.startX, y: t.startY, held: false, progress: 0 };
         const rawX = (grip.held ? grip.x : t.startX) * width;
         const rawY = (grip.held ? grip.y : t.startY) * height;

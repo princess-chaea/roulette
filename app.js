@@ -10,13 +10,14 @@
   const initialState = () => ({
     version: 1,
     title: '우리 반 행운 뽑기',
-    mode: 'pose', wheelLayout: 'grouped',
+    mode: 'pose', wheelLayout: 'grouped', wheelText: 'large',
     prizes: ['블루투스 스피커', '문구 세트', '간식 꾸러미', '달콤한 초콜릿'].map((name, index) => ({ id: crypto.randomUUID(), name, quantity: [1, 3, 6, 10][index], rank: index + 1 })),
     history: [], pending: null
   });
   let storageOK = true;
   function validState(value) {
     return value && value.version === 1 && typeof value.title === 'string' && value.title.length <= 40 && ['pose', 'circle'].includes(value.mode) &&
+      (value.wheelText === undefined || ['large', 'small', 'rank'].includes(value.wheelText)) &&
       (value.wheelLayout === undefined || ['grouped', 'split'].includes(value.wheelLayout)) &&
       Array.isArray(value.prizes) && value.prizes.length > 0 && value.prizes.length <= 12 &&
       value.prizes.every((p, i) => typeof p.id === 'string' && typeof p.name === 'string' && p.name.length <= 40 && p.rank === i + 1 && Number.isInteger(p.quantity) && p.quantity >= 0 && p.quantity <= 999) &&
@@ -29,7 +30,7 @@
       const data = localStorage.getItem(STORAGE_KEY);
       if (!data) return initialState();
       const parsed = JSON.parse(data);
-      if (validState(parsed)) { parsed.wheelLayout ??= 'grouped'; return parsed; }
+      if (validState(parsed)) { parsed.wheelLayout ??= 'grouped'; parsed.wheelText ??= 'large'; return parsed; }
       storageOK = false;
     } catch { storageOK = false; }
     return initialState();
@@ -92,6 +93,7 @@
   function renderEditor() {
     $('event-title').value = state.title;
     document.querySelectorAll('[name=wheel-layout]').forEach(input => { input.checked = input.value === state.wheelLayout; });
+    document.querySelectorAll('[name=wheel-text]').forEach(input => { input.checked = input.value === state.wheelText; });
     $('prize-rows').replaceChildren();
     state.prizes.forEach(prize => {
       const row = el('div', 'prize-row');
@@ -141,7 +143,7 @@
   function renderWheel(containerId) {
     const svg = svgNode('svg', { viewBox: '0 0 600 600', role: 'img', 'aria-label': '남은 상품 개수에 비례한 경품 룰렛' });
     const options = math.visualSegments(state.prizes, state.wheelLayout);
-    options.forEach(segment => {
+    options.forEach((segment, index) => {
       const [x1, y1] = point(segment.start), [x2, y2] = point(segment.end);
       const shape = segment.end - segment.start >= 359.99
         ? svgNode('circle', { cx: 300, cy: 300, r: 290, fill: color(segment) })
@@ -151,14 +153,17 @@
       shape.append(svgNode('title', {}, `${segment.rank}등 ${segment.name}: ${(segment.probability * 100).toFixed(1)}%`));
       svg.append(shape);
       const [x, y] = point(segment.midpoint, 190);
-      const label = svgNode('text', { x, y: y - (segment.probability < .08 ? 0 : 12), 'text-anchor': 'middle', 'font-size': segment.probability < .08 ? 15 : 18, 'font-weight': 700 });
-      label.textContent = segment.rank + '등';
-      if (segment.probability >= .08) {
-        const displayed = segment.name.length > 9 ? segment.name.slice(0, 8) + '…' : segment.name;
-        label.append(svgNode('tspan', { x, dy: 29, 'font-size': 17, 'font-weight': 500 }, displayed));
-        label.append(svgNode('tspan', { x, dy: 26, 'font-size': 14, 'font-weight': 400, opacity: .7 }, segment.quantity + '개'));
-      }
-      svg.append(label);
+      const layout = presentation.wheelLabel(segment, state.wheelText);
+      const clipId = `${containerId}-label-${index}`;
+      const clip = svgNode('clipPath', { id: clipId });
+      clip.append(svgNode('circle', { cx:x, cy:y, r:layout.radius })); svg.append(clip);
+      const labels = svgNode('g', { 'clip-path': `url(#${clipId})`, 'data-wheel-text':state.wheelText });
+      layout.lines.forEach((line, lineIndex) => labels.append(svgNode('text', {
+        x, y:y + line.y, 'text-anchor':'middle', 'dominant-baseline':'central',
+        'font-size':line.size, 'font-weight':lineIndex === 0 ? 700 : 500,
+        opacity:lineIndex === 2 ? .7 : 1
+      }, line.text)));
+      svg.append(labels);
     });
     if (!options.length) svg.append(svgNode('text', { x: 300, y: 170, 'text-anchor': 'middle', 'font-size': 22 }, '상품을 추가해 주세요'));
     $(containerId).replaceChildren(svg);
@@ -456,6 +461,10 @@
     renderEditor(); changed(); $('prize-rows').lastElementChild.querySelector('input').focus();
   });
   $('event-title').addEventListener('input', event => { state.title = event.target.value; save(); });
+  document.querySelectorAll('[name=wheel-text]').forEach(input => input.addEventListener('change', () => {
+    if (!input.checked || busy) return;
+    state.wheelText = input.value; changed();
+  }));
   document.querySelectorAll('[name=wheel-layout]').forEach(input => input.addEventListener('change', () => {
     if (!input.checked || busy) return;
     state.wheelLayout = input.value; changed();
