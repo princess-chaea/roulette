@@ -179,12 +179,17 @@ test('an uneven broad circle works with one wrist, no visible elbows and a brief
   for (let t = 3100; t <= 3400; t += 100) r = track(0, 1, t, false);
   assert.equal(r.grip.held, true);
   const radii = [0.55, 0.85, 1.5, 1.6];
+  let wins = 0;
   for (let i = 0; i < 20; i++) {
     r = track(15 * (i + 1), radii[i % 4], 3470 + 70 * i, i < 4);
     assert.equal(r.mode, 'circle');
-    assert.equal(r.matched, i === 19);
+    if (r.matched) {
+      wins++;
+      assert.ok(i >= 15);
+      assert.equal(r.direction, 'clockwise');
+    }
   }
-  assert.ok(Math.abs(r.angleDeg - 300) < 1e-8);
+  assert.equal(wins, 1);
 });
 
 test('the cached shoulder cannot bridge a different person or more than 500ms, and a lost wrist releases the grip', () => {
@@ -533,12 +538,119 @@ test('an interrupted crank retains the stage and signed rotation until visible m
     result = sample(sign * 235);
     assert.equal(result.progress, progress);
     assert.equal(result.angleDeg, angleDeg);
+    let wins = 0;
     for (let advance = 30; advance <= 210; advance += 30) {
       result = sample(sign * (235 + advance));
-      assert.equal(result.matched, advance === 210, interruption);
+      if (result.matched) {
+        wins++;
+        assert.ok(advance >= 150, interruption);
+        assert.equal(result.direction, sign > 0 ? 'clockwise' : 'counterclockwise');
+      }
     }
+    assert.equal(wins, 1, interruption);
     assert.equal(sample(0).matched, false);
     flow.reset();
     assert.equal(sample(0).mode, 'presence');
+  }
+});
+
+function freeSweepSession(aspect = 1, interval = 55) {
+  const flow = new MotionFlow();
+  let time = 0, result;
+  for (; time <= 3000; time += 100) result = flow.update(upperBody(true), time, aspect);
+  const { startX, startY } = result.target;
+  function sample(offset) {
+    const points = upperBody();
+    points[16] = null;
+    points[15] = offset ? point(1 - startX - offset[0], startY + offset[1] * aspect) : null;
+    return flow.update(points, time += interval, aspect);
+  }
+  for (let i = 0; i < 5; i++) result = sample([0, 0]);
+  assert.equal(result.grip.held, true);
+  return sample;
+}
+
+test('large loose sweeps work around the participant’s own centre in either direction', () => {
+  const rectangle = [[0, 0], [.06, -.02], [.17, -.04], [.23, .02], [.21, .14],
+    [.23, .29], [.16, .34], [.06, .31], [-.02, .33], [-.04, .21], [-.02, .09], [0, 0]];
+  const ellipse = Array.from({ length: 21 }, (_, i) => {
+    const a = i * Math.PI / 10;
+    return [.21 * Math.sin(a), .11 * (1 - Math.cos(a))];
+  });
+  for (const path of [rectangle, ellipse]) for (const sign of [1, -1]) {
+    const sample = freeSweepSession();
+    const results = path.map(([x, y]) => sample([x, sign * y]));
+    const matches = results.filter(r => r.matched);
+    assert.equal(matches.length, 1);
+    assert.equal(matches[0].direction, sign > 0 ? 'clockwise' : 'counterclockwise');
+    assert.equal(matches[0].progress, 100);
+    assert.equal(sample([0, 0]).matched, false);
+  }
+});
+
+test('a partially hidden off-centre sweep holds its progress and finishes with visible movement', () => {
+  const sample = freeSweepSession();
+  const path = i => [.19 * Math.sin(i * Math.PI / 12), .15 * (1 - Math.cos(i * Math.PI / 12))];
+  let before;
+  for (let i = 0; i <= 10; i++) before = sample(path(i));
+  assert.ok(before.progress > 12 && !before.matched);
+  for (const pos of [null, null, null, null, null, null, null, path(13), path(13)]) {
+    const r = sample(pos);
+    assert.equal(r.progress, before.progress);
+    assert.equal(r.matched, false);
+    assert.equal(r.mode, 'circle');
+    assert.equal(r.grip.held, true);
+  }
+  const results = Array.from({ length: 11 }, (_, index) => sample(path(index + 14)));
+  assert.equal(results.filter(r => r.matched).length, 1);
+});
+
+test('jitter, repeated diagonal swings and a single half sweep do not complete a free turn', () => {
+  const paths = [
+    Array.from({ length: 60 }, (_, i) => [.018 * Math.sin(i), .014 * Math.cos(i)]),
+    Array.from({ length: 55 }, (_, i) => [.19 * Math.sin(i / 3), .26 * Math.sin(i / 3)]),
+    Array.from({ length: 17 }, (_, i) => [.22 * Math.sin(i * Math.PI / 16), .15 * (1 - Math.cos(i * Math.PI / 16))])
+  ];
+  for (const path of paths) {
+    const sample = freeSweepSession();
+    for (const p of [...path, null, null, ...Array(10).fill([0, 0])]) assert.equal(sample(p).matched, false);
+  }
+});
+
+test('a reach away from the handle followed by a partly occluded broad loop completes once', () => {
+  for (const sign of [-1, 1]) {
+    const sample = freeSweepSession();
+    for (let i = 1; i <= 7; i++) sample([-.03 * i, 0]);
+    let wins = 0;
+    for (let i = 0; i <= 32; i++) {
+      const a = Math.PI * i / 16;
+      const r = sample(a > 1.9 && a < 2.9 ? null :
+        [-.42 + .21 * Math.cos(a), sign * .17 * Math.sin(a)]);
+      if (r.matched) {
+        wins++;
+        assert.equal(r.direction, sign > 0 ? 'clockwise' : 'counterclockwise');
+      }
+    }
+    assert.equal(wins, 1);
+  }
+});
+
+test('variable radius and camera sampling intervals tolerate a missing section of an offset sweep', () => {
+  for (const sign of [-1, 1]) for (const interval of [50, 67, 80, 95, 110]) {
+    const aspect = 16 / 9, sample = freeSweepSession(aspect, interval);
+    const startX = sample([0, 0]).target.startX;
+    let wins = 0;
+    for (let t = 0; t <= 2100; t += interval) {
+      const a = sign * Math.min(2 * Math.PI, Math.max(0, t - 550) / 1400 * 2 * Math.PI);
+      let x = startX + (.48 - startX) * Math.min(1, Math.max(0, t - 350) / 200);
+      if (t > 550) x = .27 + .21 * Math.cos(a) * (1 + .15 * Math.sin(3 * a));
+      const y = .17 * Math.sin(a) * (1 + .25 * Math.cos(2 * a));
+      const r = sample(Math.abs(a) > 1.9 && Math.abs(a) < 2.9 ? null : [x - startX, y]);
+      if (r.matched) {
+        wins++;
+        assert.equal(r.direction, sign > 0 ? 'clockwise' : 'counterclockwise');
+      }
+    }
+    assert.equal(wins, 1, 'sample interval ' + interval + ', direction ' + sign);
   }
 });

@@ -211,7 +211,7 @@
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
     $('live-guide').hidden = !camera?.running || mode === 'presence';
     $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
-    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '큰 노란 손잡이 근처에 손을 가져오고, 잡히면 편하게 한 바퀴 돌려 주세요. 원 모양이 조금 달라도 괜찮아요.';
+    $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '손잡이를 잡은 뒤 크게 한 바퀴 휘둘러 주세요. 원을 맞춰 그리지 않아도 되고, 손이 잠깐 안 보여도 이어집니다.';
   }
   function setProgress(percent, message) {
     $('progress-fill').style.width = percent + '%'; $('progress-number').textContent = percent + '%';

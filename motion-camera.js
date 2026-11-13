@@ -147,7 +147,7 @@
         if (result.direction !== 'counterclockwise') arrow(-Math.PI * .92, -Math.PI * .15, false);
         if (result.direction !== 'clockwise') arrow(Math.PI * .92, Math.PI * .15, true);
         ctx.font = `bold ${Math.max(12, width / 40)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
-        ctx.fillText(result.direction ? '이 방향으로 계속 돌려요' : '어느 방향이든 한 바퀴!', t.x * width, t.y * height + arrowRadius + width / 28);
+        ctx.fillText(result.direction ? '크게 한 바퀴 휘둘러요!' : '어느 방향이든 크게 한 바퀴!', t.x * width, t.y * height + arrowRadius + width / 28);
         ctx.restore();
         const grip = result.grip || { x: t.startX, y: t.startY, held: false, progress: 0 };
         const rawX = (grip.held ? grip.x : t.startX) * width;
@@ -179,7 +179,7 @@
         ctx.beginPath(); ctx.arc(handX, handY, width / 23, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * (grip.held ? 1 : Math.max(.03, grip.progress || 0))); ctx.stroke();
         ctx.fillStyle = '#fffce6'; ctx.shadowColor = '#173d35'; ctx.shadowBlur = 4;
         ctx.font = `bold ${Math.max(12, width / 38)}px KERISBaeum,sans-serif`; ctx.textAlign = 'center';
-        ctx.fillText(grip.held ? '좋아요! 편하게 한 바퀴!' : '이 근처에 손을 가져오세요', handX, handY - width / 20);
+        ctx.fillText(grip.held ? '원을 맞추지 않아도 괜찮아요!' : '이 근처에 손을 가져오세요', handX, handY - width / 20);
         ctx.shadowBlur = 0;
       }
     }

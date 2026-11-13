@@ -61,6 +61,57 @@
     return { x: 1 - points[arm.wrist].x, y: points[arm.wrist].y };
   }
 
+  // Estimate the centre from the user's own sweep. A break starts a new
+  // observed stroke: neither its distance nor its angle crosses an unseen gap.
+  function trackFreeSweep(trace, wrist, aspect, time) {
+    const point = { x: wrist.x, y: wrist.y / aspect, time, afterGap: trace.afterGap };
+    const points = trace.points, last = points[points.length - 1];
+    if (last && !point.afterGap && Math.hypot(point.x - last.x, point.y - last.y) < 0.012) return null;
+    trace.afterGap = false;
+    points.push(point);
+    if (points.length > 192) points.shift();
+    if (point.afterGap || points.length < 7) return null;
+    const whole = measureSweep(points);
+    if (whole?.matched) return whole;
+    // The participant may reach from the handle to their own starting point.
+    // Try recent strokes as well so that this lead-in cannot skew the centre.
+    const stride = Math.max(3, Math.ceil(points.length / 12));
+    for (let start = 1; start <= points.length - 7; start += stride) {
+      const recent = measureSweep(points.slice(start));
+      if (recent?.matched) return recent;
+    }
+    return whole;
+  }
+
+  function measureSweep(points) {
+    const point = points[points.length - 1];
+    const xs = points.map(p => p.x), ys = points.map(p => p.y);
+    const left = Math.min(...xs), top = Math.min(...ys);
+    const width = Math.max(...xs) - left, height = Math.max(...ys) - top;
+    if (width < 0.12 || height < 0.10) return null;
+    const diameter = Math.max(width, height), cx = left + width / 2, cy = top + height / 2;
+    let net = 0, turns = 0, distance = 0, duration = 0, twiceArea = 0, interrupted = false;
+    for (let i = 1; i < points.length; i++) {
+      const a = points[i - 1], b = points[i];
+      if (b.afterGap) { interrupted = true; continue; }
+      const step = wrapAngle(Math.atan2(b.y - cy, b.x - cx) - Math.atan2(a.y - cy, a.x - cx));
+      net += step;
+      turns += Math.abs(step);
+      twiceArea += (a.x - cx) * (b.y - cy) - (a.y - cy) * (b.x - cx);
+      distance += Math.hypot(b.x - a.x, b.y - a.y);
+      duration += Math.max(0, b.time - a.time);
+    }
+    const winding = Math.abs(net);
+    if (winding < turns * 0.72 || Math.abs(twiceArea) < 0.35 * width * height) return null;
+    const first = points[0], closure = Math.hypot(point.x - first.x, point.y - first.y);
+    const required = 260 * Math.PI / 180;
+    // Short occlusions can hide much of a wide swing's travelled distance.
+    // Winding, closure and area still require visible motion around the loop.
+    const fraction = Math.min(winding / required, distance / ((interrupted ? 1.7 : 2.15) * diameter));
+    return { fraction, net, speed: winding * 1000 / Math.max(1, duration),
+      matched: fraction >= 1 && closure <= 0.50 * diameter && duration >= 200 };
+  }
+
   function heldPose(kind, points, frame) {
     if (kind === 'hands_near_shoulders') {
       const center = 1 - frame.x;
@@ -123,14 +174,17 @@
       this.lastResult = status('카메라에 상체를 보여 주세요.', 0, idleGrip());
     }
 
-    interrupt(message) {
+    interrupt(message, trackingLost = true) {
       if (!this.tuning.retainProgress) this.reset();
       else {
         this.lastPoseTime = null;
         this.lastTime = null;
         this.previousBody = null;
         this.lastVisibleBody = null;
-        if (this.circle?.angle != null) this.circle.rebase = true;
+        if (this.circle?.angle != null) {
+          this.circle.rebase = true;
+          if (trackingLost && this.circle.trace) this.circle.trace.afterGap = true;
+        }
         else if (this.circle) {
           this.circle = null;
           const target = this.lastResult.target;
@@ -186,9 +240,27 @@
       this.previousBody = frame;
       if (measured) this.lastVisibleBody = { frame, time: timestampMs, points: landmarks };
       this.lastTime = timestampMs;
+      const previous = this.lastResult;
       this.lastResult = this.mode === 'pose'
         ? this.followPose(landmarks, frame, timestampMs)
         : this.spinCircle(landmarks, frame, timestampMs, aspectRatio);
+      if (this.mode === 'circle' && this.circle?.trace) {
+        const arc = this.circle, wrist = wristAt(landmarks, arc.arm);
+        const sweep = wrist && trackFreeSweep(arc.trace, wrist, aspectRatio, timestampMs);
+        if (sweep && !this.lastResult.matched) {
+          const progress = Math.floor(clamp(12 + 88 * sweep.fraction, 12, 95));
+          if (sweep.matched || progress > Math.max(previous.progress, this.lastResult.progress)) {
+            this.lastResult = status(sweep.matched ? '성공! 룰렛이 돌아갑니다.' : TURN_HINT,
+              sweep.matched ? 100 : progress, { target: arc.target, grip: { ...wrist, held: true, progress: 1 },
+                angleDeg: sweep.net * 180 / Math.PI, direction: sweep.net > 0 ? 'clockwise' : 'counterclockwise',
+                matched: sweep.matched, speed: sweep.speed });
+          }
+        }
+        if (!this.lastResult.matched && this.lastResult.progress < previous.progress) {
+          this.lastResult = { ...this.lastResult, progress: previous.progress, angleDeg: previous.angleDeg,
+            direction: previous.direction };
+        }
+      }
       this.done = this.lastResult.matched;
       return this.lastResult;
     }
@@ -218,7 +290,7 @@
     spinCircle(points, frame, time, aspect) {
       const target = this.circle?.target ?? targetFor(frame, aspect);
       const restart = message => {
-        if (this.tuning.retainProgress && this.circle?.angle != null) return this.interrupt(message);
+        if (this.tuning.retainProgress && this.circle?.angle != null) return this.interrupt(TURN_HINT, false);
         this.circle = null;
         const next = targetFor(frame, aspect);
         return status(message, 0, { target: next, ...idleGrip(next) });
@@ -247,7 +319,7 @@
         if (!wrist) return this.interrupt('같은 손이 다시 보이면 이어서 돌려 주세요.');
         const dx = wrist.x - target.x, dy = (wrist.y - target.y) / aspect;
         const radiusRatio = Math.hypot(dx, dy) / target.radius;
-        if (radiusRatio < 0.15 || radiusRatio > 3.2) return this.interrupt('손을 안내 원 가까이 가져와 주세요.');
+        if (radiusRatio < 0.15 || radiusRatio > 3.2) return this.interrupt(TURN_HINT, false);
         // A returning wrist establishes a new reference angle. Only subsequent
         // motion can advance the retained turn, even after a long camera gap.
         if (arc.movingSince !== null) arc.movingSince += time - arc.lastMotionTime;
@@ -270,7 +342,11 @@
       if (arc.angle === null) {
         if (startDistance(wrist) > target.grabRadius) return restart('시작점에서 손을 잠시 멈춰 주세요.');
         const held = time - arc.startTime;
-        if (held >= this.tuning.startHoldMs) { arc.angle = angle; arc.lastMotionTime = time; }
+        if (held >= this.tuning.startHoldMs) {
+          arc.angle = angle;
+          arc.lastMotionTime = time;
+          if (this.tuning.retainProgress) arc.trace = { points: [], afterGap: false };
+        }
         const progress = arc.angle === null ? held / this.tuning.startHoldMs : 1;
         return status(arc.angle === null ? '시작점에서 손을 잠시 멈춰 주세요.' : TURN_HINT,
           Math.floor(12 * progress), { target, grip: { ...wrist, held: arc.angle !== null, progress }, angleDeg: 0 });
