@@ -154,19 +154,32 @@
     }
     function celebrate(rank) {
       stop();
-      if (muted || context?.state !== 'running') return;
       const theme = fanfares[Number(rank)];
-      if (!theme) return;
-      const start = context.currentTime;
+      if (muted || !context || !theme) return;
+      const run = generation;
+      const expires = Date.now() + 350;
+      const playTheme = () => {
+        if (run !== generation || muted || context.state !== 'running' || Date.now() > expires) return;
+        emitTheme(theme);
+      };
+      if (context.state === 'running') playTheme();
+      else {
+        // Retry an already enabled context once after switching windows.
+        // Never play a deferred result after the dialog closes or another draw starts.
+        try { context.resume()?.then(playTheme, () => {}); } catch {}
+      }
+    }
+    function emitTheme(theme) {
+      const start = context.currentTime + .015;
       for (const [delay, frequency, duration, strength] of theme) {
         let voice;
         try {
           const source = context.createOscillator(), envelope = context.createGain();
           const at = start + delay, end = at + duration;
-          source.type = 'sine';
+          source.type = 'triangle';
           source.frequency.setValueAtTime(frequency, at);
           envelope.gain.setValueAtTime(.0001, at);
-          envelope.gain.linearRampToValueAtTime(strength, at + .018);
+          envelope.gain.linearRampToValueAtTime(strength * 1.9, at + .022);
           envelope.gain.exponentialRampToValueAtTime(.0001, end);
           source.connect(envelope);
           envelope.connect(output);

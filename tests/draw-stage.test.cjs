@@ -85,7 +85,8 @@ function runApp() {
     getComputedStyle: el => el.style,
     crypto: { randomUUID: () => 'mock-' + ++serial, getRandomValues: array => array },
     localStorage: { getItem: () => null, setItem: (_, value) => { snapshot = JSON.parse(value); } },
-    matchMedia: () => ({ matches: false }), setTimeout: fn => timers.push(fn), ...animationHost,
+    matchMedia: () => ({ matches: false }), setTimeout: (fn, delay) => { const timer = { fn, delay }; timers.push(timer); return timer; },
+    clearTimeout: timer => { const i = timers.indexOf(timer); if (i !== -1) timers.splice(i, 1); }, ...animationHost,
   };
   runInNewContext(app, sandbox, { filename: 'app.js' });
   const camera = currentCamera;
@@ -94,11 +95,11 @@ function runApp() {
     await flush();
     assert.equal(get('result-dialog').open, false, 'the result waits until after settling');
     assert.equal(timers.length, 1);
-    timers.shift()();
+    timers.shift().fn();
     await flush();
     assert.equal(get('result-dialog').open, true);
   }
-  return { get, camera, finish, spins, scrolls, audio, audioEvents, state: () => snapshot, body: doc.body, fullscreen(on) {
+  return { get, camera, finish, spins, scrolls, timers, audio, audioEvents, state: () => snapshot, body: doc.body, fullscreen(on) {
     doc.fullscreenElement = on ? {} : null;
     doc.emit('fullscreenchange');
   }, split(open) {
@@ -178,8 +179,12 @@ test('video, tracking canvas and fitted corner guide share the same camera viewp
   assert.match(scene, /id="camera-video"[\s\S]*id="tracking-overlay"[\s\S]*id="camera-guide-bounds"[\s\S]*id="live-guide"/);
   const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
   assert.match(css, /\.camera-guide-bounds\s*\{[^}]*inset:var\(--fit-y,0px\) var\(--fit-x,0px\);/);
-  assert.match(css, /\.camera-scene \.live-guide img\s*\{[^}]*grid-column:2;[^}]*148px/);
+  assert.match(css, /\.camera-scene \.live-guide img\s*\{[^}]*grid-row:1;[^}]*230px/);
   assert.match(css, /\.camera-guide-bounds\[data-motion-stage="presence"\] \.live-guide\s*\{[^}]*top:81%;/);
+  assert.match(css, /\.camera-scene \.live-guide > div\s*\{[^}]*grid-row:2; width:100%;/);
+  const mirror = readFileSync(resolve(__dirname, '../camera-window.js'), 'utf8');
+  assert.match(mirror, /\.guide-panel img \{ grid-row:1;[^}]*230px/);
+  assert.match(mirror, /\.guide-panel > div \{ grid-row:2; width:100%;/);
   assert.match(css, /#tracking-overlay\{z-index:4;/);
   assert.doesNotMatch(css, /--guide-rail/);
 });
@@ -226,4 +231,27 @@ test('the audible spin starts on a gesture click and stops before the one popup 
   h.get('toggle-sound').emit('click');
   assert.equal(h.audio.muted,false);
   assert.equal(h.audioEvents.at(-1)[0],'unlock');
+});
+
+
+test('the prize stays open for 2 seconds, saves once and returns to the camera', async () => {
+  const h = runApp();
+  h.get('manual-spin').emit('click');
+  await h.finish();
+  assert.equal(h.timers.length, 1);
+  assert.equal(h.timers[0].delay, 2000);
+  assert.equal(h.state().history.length, 1);
+  h.timers.shift().fn();
+  assert.equal(h.get('result-dialog').open, false);
+  assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
+  assert.equal(h.state().history.length, 1);
+});
+
+test('manual confirmation cancels the pending auto-close before the next draw', async () => {
+  const h = runApp();
+  h.get('manual-spin').emit('click');
+  await h.finish();
+  h.get('result-dialog').close();
+  assert.equal(h.timers.length, 0);
+  assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
 });

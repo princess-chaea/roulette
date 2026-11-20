@@ -119,8 +119,28 @@ test('every supported rank has a unique melody; ranks 4–12 remain short and qu
     unique.add(notes);
     if (rank > 3) {
       assert.equal(f.voices.length, 2);
-      assert.ok(Math.max(...f.voices.map(voice => voice.stopTimes[0])) - 1 <= .33);
+      assert.ok(Math.max(...f.voices.map(voice => voice.stopTimes[0])) - 1 <= .35);
     }
   }
   assert.equal(unique.size, 12);
+});
+
+
+test('result resumes a suspended context without replaying a result already closed', async () => {
+  const f = fake(), audio = create(f.environment);
+  audio.unlock();
+  f.instance.state = 'suspended';
+  audio.celebrate(4);
+  await Promise.resolve();
+  assert.equal(f.voices.length, 2);
+  f.instance.state = 'suspended';
+  let resumeNow;
+  f.instance.resume = () => new Promise(resolve => {
+    resumeNow = () => { f.instance.state = 'running'; resolve(); };
+  });
+  audio.celebrate(1);
+  audio.stop();
+  resumeNow();
+  await Promise.resolve();
+  assert.equal(f.voices.length, 2);
 });

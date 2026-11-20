@@ -69,12 +69,11 @@
       .guide-bounds { position:absolute; inset:var(--fit-y,0px) var(--fit-x,0px); z-index:1; display:flex; align-items:flex-end; justify-content:center; visibility:hidden; pointer-events:none; container-type:inline-size; }
       .guide-bounds[data-frame-fit="ready"] { visibility:visible; }
       .feed-tracking { z-index:2; pointer-events:none; }
-      .guide-panel { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:end; width:min(94%,520px); min-width:0; gap:clamp(4px,1.2cqw,9px); margin:3px; color:#fff; }
-      .guide-panel img { grid-column:2; grid-row:1; display:block; width:auto; height:clamp(25px,calc(var(--fit-height,240px) * .21),148px); max-width:36cqw; aspect-ratio:1; object-fit:contain; background:#faffebc9; border:1px solid #fff9; border-radius:12px; padding:2px; }
-      .guide-panel > div { grid-column:3; grid-row:1; padding:clamp(4px,.85cqw,8px); min-width:0; border:1px solid #f4fff468; border-radius:9px; background:#102720df; box-shadow:0 4px 14px #0006; }
-      .guide-bounds[data-motion-stage="circle"] .guide-panel img { height:clamp(25px,calc(var(--fit-height,240px) * .18),128px); }
-      h1 { margin:0; font:700 clamp(12px,2.5cqw,22px)/1.25 SchoolPoster,KERISBaeum,sans-serif; overflow-wrap:anywhere; }
-      p { margin:.35em 0 0; font-size:clamp(11px,1.65cqw,15px); line-height:1.35; }
+      .guide-panel { display:grid; grid-template-columns:minmax(0,1fr); justify-items:center; align-items:end; width:min(90%,760px); min-width:0; gap:clamp(3px,.8cqw,8px); margin:0 0 clamp(3px,1cqw,12px); color:#fff; }
+      .guide-panel img { grid-row:1; display:block; width:auto; height:clamp(24px,calc(var(--fit-height,240px) * .32),230px); max-width:42cqw; max-height:40cqw; aspect-ratio:1; object-fit:contain; background:#faffebd9; border:1px solid #fff9; border-radius:14px; padding:2px; }
+      .guide-panel > div { grid-row:2; width:100%; padding:clamp(4px,1cqw,11px) clamp(9px,2cqw,24px); min-width:0; text-align:center; border:1px solid #f4fff481; border-radius:12px; background:#102720f2; box-shadow:0 4px 18px #0007; }
+      h1 { margin:0; font:700 clamp(15px,min(4cqw,calc(var(--fit-height,240px) * .078)),44px)/1.15 SchoolPoster,KERISBaeum,sans-serif; word-break:keep-all; overflow-wrap:anywhere; }
+      .guide-panel p { margin:.25em 0 0; font-size:clamp(11px,min(2.25cqw,calc(var(--fit-height,240px) * .044)),23px); line-height:1.28; color:#f0f8e7; word-break:keep-all; }
       .guide-bounds[data-motion-stage="presence"] .guide-panel { position:absolute; top:81%; bottom:auto; left:50%; transform:translateX(-50%); display:block; width:max-content; max-width:96%; margin:0; }
       .guide-bounds[data-motion-stage="presence"] .guide-panel > div { padding:clamp(3px,1cqw,8px) clamp(7px,2cqw,16px); text-align:center; }
       .guide-bounds[data-motion-stage="presence"] h1 { font-size:clamp(12px,3.45cqw,32px); line-height:1.16; word-break:keep-all; }
@@ -93,9 +92,6 @@
       @media (max-width:650px) {
         footer { gap:5px; }
         nav { max-width:11rem; }
-      }
-      @container (max-width:450px) {
-        .guide-panel p { display:none; }
       }
     `);
 

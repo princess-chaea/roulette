@@ -21,6 +21,13 @@
   const themeFor = rank => Number.isInteger(rank) && rank > 0
     ? themes[rank] || lighterThemes[(rank - 4) % lighterThemes.length] : null;
 
+  // Edge decoration is always visible, even after the burst has faded or
+  // if animation is disabled. Keep its footprint out of the dialog's center.
+  const edgeSparks = [
+    [8, 12], [92, 13], [12, 30], [87, 32], [9, 69], [91, 69],
+    [15, 86], [84, 86], [5, 47], [95, 46], [23, 17], [76, 19],
+  ];
+
   const goldBursts = [[11, 23], [90, 20], [27, 46], [75, 43], [11, 73], [91, 72], [45, 11], [56, 92]];
 
   function particleFor(theme, i) {
@@ -53,10 +60,10 @@
         type: i % 5 === 0 ? 'star' : 'diamond', hue };
     }
     if (theme.light) {
-      return { x: 46 + direction * (8 + i * 11 % 29), y: 37 + i * 17 % 24,
-        dx: direction * (17 + i * 11 % 56), dy: -(29 + i * 19 % 60),
-        turn: direction * (40 + i * 17 % 125), time: 670 + i * 43 % 640,
-        wait: i < 7 ? 0 : i * 23 % 270, size: 5 + i * 11 % 10,
+      return { x: 50 + direction * (24 + i * 11 % 13), y: 22 + i * 17 % 54,
+        dx: direction * (12 + i * 11 % 54), dy: -(32 + i * 19 % 106),
+        turn: direction * (40 + i * 17 % 180), time: 1510 + i * 43 % 490,
+        wait: i < 8 ? 0 : i * 23 % 170, size: 9 + i * 11 % 13,
         type: i % 5 === 0 ? 'star' : theme.type, hue };
     }
     return { x: 50 + direction * (20 + i * 11 % 20), y: 59 + i * 13 % 26,
@@ -104,6 +111,20 @@
         '--piece': size + 'px', '--hue': hue
       })) piece.style.setProperty(key, value);
       layer.append(piece);
+    }
+    const sparkCount = theme.name === 'gold' ? 12 : theme.light ? 6 : 8;
+    for (let i = 0; i < sparkCount; i++) {
+      const spark = doc.createElement('span');
+      const [x, y] = edgeSparks[i];
+      spark.className = 'fanfare-edge-spark';
+      spark.textContent = theme.name === 'silver' ? (i % 2 ? '✦' : '◆')
+        : theme.name === 'bronze' ? (i % 2 ? '✧' : '✦')
+        : i % 2 ? '✦' : '✷';
+      spark.style.setProperty('--x', x + '%');
+      spark.style.setProperty('--y', y + '%');
+      spark.style.setProperty('--hue', theme.colors[i % 2 ? 0 : theme.colors.length - 1]);
+      spark.style.setProperty('--spark-angle', (i % 2 ? 1 : -1) * (8 + i % 4 * 6) + 'deg');
+      layer.append(spark);
     }
     dialog.prepend(layer);
     return true;

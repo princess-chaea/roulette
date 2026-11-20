@@ -91,7 +91,7 @@ test('all ranks get a viewport-sized card while gold effects have their own uncl
   const css = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../result-fanfare.css'), 'utf8');
   assert.match(css, /dialog\[open\]:is\(\.result-dialog,\.result\)\s*\{[^}]*height:100dvh;[^}]*max-width:none;/);
   assert.match(css, /> \.result-content \{[^}]*z-index:2; width:100%; height:100%;/);
-  assert.match(css, /\.result-fanfare\s*\{[^}]*z-index:1;[^}]*pointer-events:none;/);
+  assert.match(css, /\.result-fanfare\s*\{[^}]*z-index:3;[^}]*pointer-events:none;/);
   assert.match(css, /\[data-fanfare="gold"\] \.result-fanfare\s*\{ inset:0;/);
   assert.match(css, /\.result-content > img \{[^}]*52dvh/);
   assert.match(css, /@media \(max-height:500px\) and \(min-width:540px\)/);
@@ -114,4 +114,18 @@ test('ranks 4 to 12 each get a different lighter palette and use fewer pieces th
   assert.equal(apply(result, null, 'invalid'), true);
   assert.equal(result.dataset.fanfare, undefined);
   assert.equal(result.querySelector('.result-fanfare'), undefined);
+});
+
+test('every rank has contrast-colored stationary edge celebration, including reduced motion', () => {
+  const result = dialog();
+  for (let rank = 1; rank <= 12; rank += 1) {
+    apply(result, rank, 'spark-' + rank);
+    const sparks = result.querySelector('.result-fanfare').children.filter(x => x.className === 'fanfare-edge-spark');
+    assert.equal(sparks.length, rank === 1 ? 12 : rank <= 3 ? 8 : 6);
+    assert.ok(sparks.every(x => Number.parseInt(x.style.get('--x'), 10) < 25 || Number.parseInt(x.style.get('--x'), 10) > 75));
+    assert.ok(sparks.every(x => x.textContent && /^#[0-9a-f]+$/i.test(x.style.get('--hue'))));
+  }
+  const css = require('node:fs').readFileSync(require('node:path').resolve(__dirname, '../result-fanfare.css'), 'utf8');
+  assert.match(css, /\.fanfare-edge-spark \{[^}]*color:var\(--hue\);[^}]*text-shadow:/);
+  assert.doesNotMatch(css.split('@media (prefers-reduced-motion: reduce)')[1], /\.fanfare-edge-spark/);
 });

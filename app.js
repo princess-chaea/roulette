@@ -49,6 +49,8 @@
   let rotation = 0;
   let completedRound = false;
   let lastResult = null;
+  let resultCloseTimer = null;
+  const resultShowMs = 2000;
   let currentStage = 'presence';
   let gripRotationBase = null;
   let camera;
@@ -376,6 +378,11 @@
     RouletteFanfare.apply(dialog, lastResult.rank, lastResult.id);
     if (!dialog.open) {
       dialog.showModal();
+      const openedResultId = lastResult.id;
+      resultCloseTimer = setTimeout(() => {
+        resultCloseTimer = null;
+        if (dialog.open && lastResult?.id === openedResultId) dialog.close();
+      }, resultShowMs);
       if (!silent) spinAudio?.celebrate(Number(lastResult.rank));
     }
   }
@@ -530,14 +537,22 @@
     const result = camera?.detector.lastResult;
     if (result) setProgress(result.progress, result.message);
   });
-  $('result-dialog').addEventListener('close', nextParticipant);
+  function clearResultTimer() {
+    if (resultCloseTimer === null) return;
+    clearTimeout(resultCloseTimer);
+    resultCloseTimer = null;
+  }
+  $('result-dialog').addEventListener('close', () => {
+    clearResultTimer();
+    nextParticipant();
+  });
   $('reset-sample').addEventListener('click', () => {
     if (!confirm('설정과 당첨 기록을 지우고 예시로 다시 채울까요?')) return;
     state = initialState(); renderEditor(); resetAutoMotion(); changed();
   });
   window.addEventListener('hashchange', route);
   document.addEventListener('visibilitychange', () => { if (document.hidden && !CameraWindow.isOpen() && (camera.running || camera.connecting)) camera.stop('다른 화면으로 이동해 카메라를 껐어요.'); });
-  window.addEventListener('pagehide', event => { spinAudio?.stop(); CameraWindow.close(); camera.dispose(); if (!event.persisted) stopWatchingFit(); });
+  window.addEventListener('pagehide', event => { if (!event.persisted) clearResultTimer(); spinAudio?.stop(); CameraWindow.close(); camera.dispose(); if (!event.persisted) stopWatchingFit(); });
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
   renderEditor(); changed(); showMotionStage('presence'); route(); updateSaveStatus();
   if (state.pending) {
