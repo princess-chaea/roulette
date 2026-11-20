@@ -175,3 +175,26 @@ test('guide sits outside the shared video and landmark canvas rectangle, within 
   }
   assert.ok(html.indexOf('id="live-guide"', feedEnd) < sceneEnd);
 });
+
+test('fullscreen has a definite, stretchable scene row and puts controls below it', () => {
+  const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+  const fullscreen = 'body.roulette-fullscreen.camera-presentation:not(.dual-monitor)';
+  const rule = selector => {
+    // Keep these assertions about the actual CSS constraint that caused the
+    // failure, not just whether the fullscreen class is set in a DOM stub.
+    const marker = fullscreen + (selector ? ' ' + selector : '') + ' {';
+    const start = css.indexOf(marker);
+    assert.notEqual(start, -1, marker);
+    return css.slice(start + marker.length, css.indexOf('}', start));
+  };
+  assert.match(rule(''), /height:100dvh;[\s\S]*grid-template-rows:auto minmax\(0,1fr\)/);
+  assert.match(rule('> main'), /(?:^|;)\s*margin-block:0;/);
+  assert.match(rule('> main'), /(?:^|;)\s*height:100%;\s*min-height:0;/);
+  assert.match(rule('#draw-page:not([hidden])'), /grid-template-rows:minmax\(0,1fr\) auto auto/);
+  assert.match(rule('.draw-layout'), /grid-row:1;.*grid-template-rows:minmax\(0,1fr\)/);
+  assert.match(rule('.camera-card'), /grid-template-rows:minmax\(0,1fr\) auto/);
+  assert.match(rule('.camera-scene .camera-live-view'), /height:100%;\s*max-height:none;/);
+  assert.match(rule('#draw-stage-start'), /grid-row:2;/);
+  assert.match(css, /#camera-video,#tracking-overlay\{[^}]*object-fit:contain/);
+  assert.match(html, /styles\.css\?v=20261120f/);
+});

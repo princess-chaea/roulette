@@ -129,38 +129,51 @@ body.roulette-fullscreen .site-header .organization {
 }
 body.roulette-fullscreen .site-header .organization img { max-height:44px; object-fit:contain; object-position:right; }
 body.roulette-fullscreen .site-header .page-tabs { display:none; }
+/* Presenter uses an explicit viewport grid:
+   branded header / flexible live scene / controls. Do not let the normal
+   main { margin:auto } block-center a min-content-height grid item. */
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) {
   height:100vh; height:100dvh; min-height:320px;
-  display:grid; grid-template-rows:auto minmax(0,1fr);
+  display:grid; grid-template-rows:auto minmax(0,1fr); align-content:stretch;
 }
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) > main {
-  display:flex; flex-direction:column; width:100%; min-height:0; padding-inline:clamp(8px,2vw,24px);
+  display:grid; grid-template:minmax(0,1fr)/minmax(0,1fr); align-self:stretch;
+  width:100%; max-width:none; height:100%; min-height:0; min-width:0;
+  margin-block:0; margin-inline:auto; padding:0 clamp(6px,1vw,14px) 4px;
 }
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-page:not([hidden]) {
-  display:flex; flex:1; min-height:0; flex-direction:column; padding-bottom:8px;
+  display:grid; grid-template-rows:minmax(0,1fr) auto auto; gap:4px; min-height:0; min-width:0;
 }
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .draw-heading,
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .privacy-note { display:none; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .display-actions { margin:4px 0 6px; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .draw-layout {
-  flex:1; min-height:0; align-items:stretch;
-}
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-page .draw-controls { max-width:1310px; min-height:0; display:flex; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-card {
-  display:flex; flex-direction:column; flex:1; min-height:0; gap:5px; padding:8px;
-}
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-card .card-heading,
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { margin:0; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { padding:2px; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps>[data-step] { padding:3px; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps,
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .privacy-note { display:none; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-stage-start {
+  grid-row:2; margin:0; gap:6px;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-stage-start .button {
+  min-height:36px; height:36px; padding-block:6px;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-error { grid-row:3; margin:0; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .draw-layout {
+  grid-row:1; grid-template-rows:minmax(0,1fr); align-items:stretch; min-height:0; min-width:0;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-page .draw-controls {
+  display:grid; grid-template-rows:minmax(0,1fr); width:100%; max-width:none; min-height:0; min-width:0;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-card {
+  display:grid; grid-template-rows:minmax(0,1fr) auto; gap:4px;
+  min-height:0; min-width:0; padding:0; border:0; background:transparent; box-shadow:none;
+}
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-scene {
-  flex:1; min-height:94px; grid-template-rows:minmax(0,1fr);
+  --guide-rail:clamp(104px,13vw,172px);
+  height:100%; min-height:0; grid-template-rows:minmax(0,1fr); padding:4px;
 }
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-scene .camera-live-view {
-  height:100%; max-height:none; aspect-ratio:auto;
+  height:100%; max-height:none; min-height:0; aspect-ratio:auto; align-self:stretch;
 }
 body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom { margin-top:0; }
-body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom .button { min-height:40px; padding-block:7px; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom .button { min-height:36px; padding-block:6px; }
 @media (max-width:720px) {
   .camera-scene { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,auto) auto; gap:5px; padding:5px; }
   .camera-scene .camera-live-view { grid-area:1/1; }
@@ -174,7 +187,6 @@ body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom .
   }
 }
 @media (max-height:500px) {
-  body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { display:none; }
   body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .live-guide img { max-width:56px; }
   body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .live-guide { padding:5px; gap:4px; }
 }
