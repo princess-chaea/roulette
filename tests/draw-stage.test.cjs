@@ -10,6 +10,8 @@ const flush = () => new Promise(resolve => setImmediate(resolve));
 function runApp() {
   const nodes = new Map(), timers = [], spins = [], scrolls = [];
   const options = { popup: false };
+  const audioEvents=[];
+  const audio={muted:false, setMuted(value){this.muted=value;}, unlock(){audioEvents.push(['unlock']);}, play(data){audioEvents.push(['spin',data]);}, stop(){audioEvents.push(['stop']);}, celebrate(rank){assert.equal(get('result-dialog').open,true);audioEvents.push(['result',rank]);}};
   let currentCamera, snapshot, serial = 0;
   function node(name) {
     const classes = new Set(), events = new Map(), attrs = new Map(), children = [];
@@ -67,9 +69,10 @@ function runApp() {
   const animationHost = { requestAnimationFrame: () => 1, cancelAnimationFrame() {} };
   const sandbox = {
     document: doc, window: Object.assign(node('window'), { scrollTo() {} }), location: { hash: '#draw' },
-    RouletteMath: require('../roulette.js'), RoulettePresentation: require('../presentation.js'),
+    RouletteMath: require('../roulette.js'),
+    RoulettePresentation: { ...require('../presentation.js'), watchContainedFrame: () => () => {} },
     FirstPrizeMode: require('../operator-mode.js'), MotionGestures: require('../motion-gestures.js'),
-    RouletteFanfare: { apply() {} },
+    RouletteFanfare: { apply() {} }, RouletteSpinAudio: {create: () => audio},
     MotionCamera: class {
       constructor(hooks) { Object.assign(this, hooks); currentCamera = this; this.running = false; this.stops = 0; }
       setPoseKind() {}
@@ -95,7 +98,7 @@ function runApp() {
     await flush();
     assert.equal(get('result-dialog').open, true);
   }
-  return { get, camera, finish, spins, scrolls, state: () => snapshot, body: doc.body, fullscreen(on) {
+  return { get, camera, finish, spins, scrolls, audio, audioEvents, state: () => snapshot, body: doc.body, fullscreen(on) {
     doc.fullscreenElement = on ? {} : null;
     doc.emit('fullscreenchange');
   }, split(open) {
@@ -157,8 +160,10 @@ test('fullscreen preserves the camera when toggled and swaps position text for l
   assert.equal(h.get('camera-scene').classList.contains('is-live'), true);
   assert.equal(h.get('live-guide').hidden, false);
   assert.equal(h.get('live-guide-image').hidden, true);
+  assert.equal(h.get('camera-guide-bounds').dataset.motionStage, 'presence');
   h.camera.onResult({ mode: 'pose', progress: 33, matched: false });
   assert.equal(h.get('live-guide-image').hidden, false);
+  assert.equal(h.get('camera-guide-bounds').dataset.motionStage, 'pose');
   h.fullscreen(false);
   assert.equal(h.body.classList.contains('roulette-fullscreen'), false);
   assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
@@ -166,14 +171,17 @@ test('fullscreen preserves the camera when toggled and swaps position text for l
   assert.equal(h.camera.stops, 0);
 });
 
-test('guide sits outside the shared video and landmark canvas rectangle, within the camera scene', () => {
+test('video, tracking canvas and fitted corner guide share the same camera viewport', () => {
   const preview = html.indexOf('id="camera-preview"');
-  const feedEnd = html.indexOf('\n              </div>\n              <aside', preview);
-  const sceneEnd = html.indexOf('class="camera-bottom"', preview);
-  for (const id of ['camera-video', 'tracking-overlay']) {
-    assert.ok(html.indexOf('id="' + id + '"', preview) < feedEnd && feedEnd > preview);
-  }
-  assert.ok(html.indexOf('id="live-guide"', feedEnd) < sceneEnd);
+  const footer = html.indexOf('class="camera-bottom"', preview);
+  const scene = html.slice(preview, footer);
+  assert.match(scene, /id="camera-video"[\s\S]*id="tracking-overlay"[\s\S]*id="camera-guide-bounds"[\s\S]*id="live-guide"/);
+  const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+  assert.match(css, /\.camera-guide-bounds\s*\{[^}]*inset:var\(--fit-y,0px\) var\(--fit-x,0px\);/);
+  assert.match(css, /\.camera-scene \.live-guide img\s*\{[^}]*grid-column:2;[^}]*148px/);
+  assert.match(css, /\.camera-guide-bounds\[data-motion-stage="presence"\] \.live-guide\s*\{[^}]*top:81%;/);
+  assert.match(css, /#tracking-overlay\{z-index:4;/);
+  assert.doesNotMatch(css, /--guide-rail/);
 });
 
 test('fullscreen has a definite, stretchable scene row and puts controls below it', () => {
@@ -196,5 +204,26 @@ test('fullscreen has a definite, stretchable scene row and puts controls below i
   assert.match(rule('.camera-scene .camera-live-view'), /height:100%;\s*max-height:none;/);
   assert.match(rule('#draw-stage-start'), /grid-row:2;/);
   assert.match(css, /#camera-video,#tracking-overlay\{[^}]*object-fit:contain/);
-  assert.match(html, /styles\.css\?v=20261120f/);
+  assert.match(html, /styles\.css\?v=20261120[a-z]/);
+});
+
+
+test('the audible spin starts on a gesture click and stops before the one popup fanfare', async () => {
+  const h=runApp();
+  h.get('manual-spin').emit('click');
+  assert.deepEqual(h.audioEvents.map(e=>e[0]),['unlock','spin']);
+  const launch=h.audioEvents[1][1];
+  assert.equal(launch.animation,h.spins[0]);
+  assert.ok(launch.duration>4000&&launch.frames.every(frame=>Number.isFinite(frame.angle)));
+  assert.equal(h.get('result-dialog').open,false);
+  await h.finish();
+  assert.deepEqual(h.audioEvents.map(e=>e[0]),['unlock','spin','stop','result']);
+  assert.equal(h.audioEvents[3][1],h.state().history[0].rank);
+  h.get('result-dialog').close();
+  assert.equal(h.audioEvents.at(-1)[0],'stop');
+  h.get('toggle-sound').emit('click');
+  assert.equal(h.audio.muted,true);
+  h.get('toggle-sound').emit('click');
+  assert.equal(h.audio.muted,false);
+  assert.equal(h.audioEvents.at(-1)[0],'unlock');
 });

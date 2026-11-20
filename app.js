@@ -7,6 +7,15 @@
   const STORAGE_KEY = 'motion-roulette-prototype-v1';
   const COLORS = ['#f1aa91', '#f5d57a', '#91c7b4', '#c1b6e4', '#a8c8e5', '#e4b5d0'];
   const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const spinAudio = globalThis.RouletteSpinAudio?.create();
+  const soundKey = 'motion-roulette-muted';
+  try { spinAudio?.setMuted(localStorage.getItem(soundKey) === '1'); } catch {}
+  function renderSoundToggle() {
+    const button = $('toggle-sound');
+    if (!button || !spinAudio) return;
+    button.setAttribute('aria-pressed', String(!spinAudio.muted));
+    button.textContent = spinAudio.muted ? '소리 꺼짐' : '소리 켜짐';
+  }
   const initialState = () => ({
     version: 1,
     title: '우리 반 행운 뽑기',
@@ -209,6 +218,7 @@
     $('pose-guide').alt = starter.short + ' 동작 안내';
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
+    $('camera-guide-bounds').dataset.motionStage = mode;
     $('live-guide').hidden = !camera?.running;
     $('live-guide-image').hidden = mode === 'presence';
     $('gesture-title').textContent = mode === 'presence' ? MotionGestures.PRESENCE_HINT : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
@@ -290,7 +300,8 @@
     lensBox.classList.remove('zoom-visible');
     if (short) {
       const animation = disc.animate([{ transform: `rotate(${rotation}deg)` }, { transform: `rotate(${target}deg)` }], { duration: 120, fill: 'forwards' });
-      await animation.finished;
+      spinAudio?.play({ animation, frames: [{ offset: 0, angle: rotation }, { offset: 1, angle: target }], duration: 120 });
+      try { await animation.finished; } finally { spinAudio?.stop(); }
       disc.style.transform = `rotate(${target}deg)`; animation.cancel();
     } else {
       const approachMs = 4100;
@@ -298,8 +309,8 @@
       const duration = approachMs + settleMs;
       // One timeline includes the whole approach and all settling turns. Neither
       // wheel pauses or restarts when the pointer magnification becomes visible.
-      const keyframes = math.animationFrames(rotation, plan, approachMs, settleMs)
-        .map(({ angle, ...frame }) => ({ ...frame, transform: `rotate(${angle}deg)` }));
+      const motionFrames = math.animationFrames(rotation, plan, approachMs, settleMs);
+      const keyframes = motionFrames.map(({ angle, ...frame }) => ({ ...frame, transform: `rotate(${angle}deg)` }));
       lens.style.transition = 'none'; lens.style.transform = `rotate(${rotation}deg)`;
       lensBox.style.visibility = 'hidden'; lensBox.style.opacity = '0'; lensBox.hidden = false;
       const stage = disc.closest('.wheel-stage');
@@ -320,6 +331,7 @@
       // All visual phases share the animation clock; a throttled timer cannot
       // delay the magnification until after the wheel has slowed to a stop.
       const host = camera?.animationHost || globalThis;
+      spinAudio?.play({ animation: animations[0], frames: motionFrames, duration, host });
       let markerFrame;
       function markZoom() {
         if (animations[0].currentTime >= zoomAt) {
@@ -328,7 +340,7 @@
         } else markerFrame = host.requestAnimationFrame(markZoom);
       }
       markerFrame = host.requestAnimationFrame(markZoom);
-      await Promise.all(animations.map(animation => animation.finished));
+      try { await Promise.all(animations.map(animation => animation.finished)); } finally { spinAudio?.stop(); }
       host.cancelAnimationFrame(markerFrame); heading.cancel();
       for (const element of [disc, lens]) element.style.transform = `rotate(${target}deg)`;
       animations.forEach(animation => animation.cancel());
@@ -352,7 +364,7 @@
     $('wheel-message').textContent = `${result.rank}등 당첨! 축하합니다!`;
     // Keep the just-spun wheel unchanged until the next participant, so its pointer stays truthful.
   }
-  function showResult() {
+  function showResult(silent = false) {
     if (!lastResult) return;
     showDrawStage('wheel');
     const dialog = $('result-dialog');
@@ -362,9 +374,13 @@
     art.src = assetPath(presentation.rankImage(lastResult.rank));
     art.alt = `${lastResult.rank}등 당첨을 축하하는 새싹 캐릭터`;
     RouletteFanfare.apply(dialog, lastResult.rank, lastResult.id);
-    if (!dialog.open) dialog.showModal();
+    if (!dialog.open) {
+      dialog.showModal();
+      if (!silent) spinAudio?.celebrate(Number(lastResult.rank));
+    }
   }
   function nextParticipant() {
+    spinAudio?.stop();
     disarmMotion(); $('finish-lens').hidden = true;
     completedRound = false;
     showDrawStage('camera');
@@ -445,6 +461,7 @@
       if (result.matched) spin(result.direction || 'clockwise');
     }
   });
+  const stopWatchingFit = presentation.watchContainedFrame($('camera-preview'), $('camera-video'), $('camera-guide-bounds'));
   $('organization-mode').addEventListener('click', () => {
     if (busy) return;
     const available = math.available(state.prizes).some(prize => prize.rank === 1);
@@ -477,11 +494,12 @@
   });
   $('restart-camera').addEventListener('click', () => {
     if (busy || camera.connecting) return;
+    spinAudio?.unlock();
     camera.dispose();
     camera.start();
   });
   $('connect-camera').addEventListener('click', () => {
-    if (camera.running || camera.connecting) camera.stop(); else camera.start();
+    if (camera.running || camera.connecting) camera.stop(); else { spinAudio?.unlock(); camera.start(); }
   });
   $('add-prize').addEventListener('click', () => {
     if (state.prizes.length >= 12) return;
@@ -497,7 +515,15 @@
     if (!input.checked || busy) return;
     state.wheelLayout = input.value; changed();
   }));
-  $('manual-spin').addEventListener('click', () => spin());
+  $('manual-spin').addEventListener('click', () => { spinAudio?.unlock(); spin(); });
+  $('toggle-sound')?.addEventListener('click', () => {
+    if (!spinAudio) return;
+    spinAudio.setMuted(!spinAudio.muted);
+    if (!spinAudio.muted) spinAudio.unlock();
+    try { localStorage.setItem(soundKey, spinAudio.muted ? '1' : '0'); } catch {}
+    renderSoundToggle();
+  });
+  renderSoundToggle();
   $('show-history').addEventListener('click', showHistory);
   $('close-history').addEventListener('click', () => $('history-dialog').close());
   $('history-dialog').addEventListener('close', () => {
@@ -511,7 +537,7 @@
   });
   window.addEventListener('hashchange', route);
   document.addEventListener('visibilitychange', () => { if (document.hidden && !CameraWindow.isOpen() && (camera.running || camera.connecting)) camera.stop('다른 화면으로 이동해 카메라를 껐어요.'); });
-  window.addEventListener('pagehide', () => { CameraWindow.close(); camera.dispose(); });
+  window.addEventListener('pagehide', event => { spinAudio?.stop(); CameraWindow.close(); camera.dispose(); if (!event.persisted) stopWatchingFit(); });
   window.addEventListener('beforeunload', event => { if (busy) { event.preventDefault(); event.returnValue = ''; } });
   renderEditor(); changed(); showMotionStage('presence'); route(); updateSaveStatus();
   if (state.pending) {
@@ -525,6 +551,6 @@
     }
     finalizeRound(); history.replaceState(null, '', '#draw'); route();
     $('wheel-message').textContent = '중단된 추첨 결과를 복구했어요. 상품은 한 번만 차감됩니다.';
-    showResult();
+    showResult(true);
   }
 })();

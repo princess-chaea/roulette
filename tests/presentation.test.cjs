@@ -1,6 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {STARTER_POSES,starterForRound,rankImage,wheelLabel}=require('../presentation.js');
+const {STARTER_POSES,starterForRound,rankImage,wheelLabel,containedFrame,watchContainedFrame}=require('../presentation.js');
 test('four starter poses cycle independently of prize odds and include an arm heart',()=>{
   assert.deepEqual(STARTER_POSES.map(p=>p.kind),['hands_up','hands_near_shoulders','one_hand_up','arm_heart']);
   assert.equal(starterForRound(0).kind,'hands_up');
@@ -28,4 +28,45 @@ test('wheel text choices adapt to sector size and never alter the prize',()=>{
       for(const line of result.lines)assert.ok(Number.isFinite(line.size)&&line.size>0);
     }
   }
+});
+
+test('contained media bounds exclude letterboxes on wide, tall and same-ratio viewports', () => {
+  assert.deepEqual(containedFrame(1300, 600, 640, 480), { width:800, height:600, x:250, y:0 });
+  assert.deepEqual(containedFrame(640, 600, 1280, 720), { width:640, height:360, x:0, y:120 });
+  assert.deepEqual(containedFrame(320, 240, 640, 480), { width:320, height:240, x:0, y:0 });
+  assert.deepEqual(containedFrame(320, 260, 480, 640), { width:195, height:260, x:62.5, y:0 });
+  assert.equal(containedFrame(0, 600, 640, 480), null);
+  assert.equal(containedFrame(640, 600, 0, 0), null);
+});
+
+test('the live guide recalculates on media metadata and viewport resize, then cleans up', () => {
+  const listeners = new Map(), props = new Map();
+  let resized, disconnected = false;
+  const video = {
+    videoWidth:0, videoHeight:0,
+    addEventListener(type, listener) { listeners.set(type, listener); },
+    removeEventListener(type) { listeners.delete(type); },
+  };
+  const viewport = {
+    clientWidth:1300, clientHeight:600,
+    ownerDocument: { defaultView: { ResizeObserver: class {
+      constructor(callback) { resized = callback; }
+      observe(node) { assert.equal(node, viewport); }
+      disconnect() { disconnected = true; }
+    } } },
+  };
+  const guide = { dataset:{}, style:{ setProperty: (name, value) => props.set(name, value) } };
+  const stop = watchContainedFrame(viewport, video, guide);
+  assert.equal(guide.dataset.frameFit, undefined);
+  video.videoWidth = 640; video.videoHeight = 480;
+  listeners.get('loadedmetadata')();
+  assert.equal(guide.dataset.frameFit, 'ready');
+  assert.equal(props.get('--fit-x'), '250.00px');
+  resized([{ contentRect: { width:480, height:480 } }]);
+  assert.equal(props.get('--fit-x'), '0.00px');
+  assert.equal(props.get('--fit-y'), '60.00px');
+  assert.equal(props.get('--fit-height'), '360.00px');
+  stop();
+  assert.equal(disconnected, true);
+  assert.equal(listeners.size, 0);
 });

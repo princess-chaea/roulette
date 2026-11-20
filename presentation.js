@@ -29,6 +29,46 @@
       return { text: line.text, size, y };
     }) };
   }
-  const api = { STARTER_POSES, starterForRound, rankImage, wheelLabel };
+  function containedFrame(boxWidth, boxHeight, mediaWidth, mediaHeight) {
+    if (![boxWidth, boxHeight, mediaWidth, mediaHeight].every(size => Number.isFinite(size) && size > 0)) return null;
+    const scale = Math.min(boxWidth / mediaWidth, boxHeight / mediaHeight);
+    const width = mediaWidth * scale, height = mediaHeight * scale;
+    return { width, height, x: Math.max(0, (boxWidth - width) / 2), y: Math.max(0, (boxHeight - height) / 2) };
+  }
+
+  // Match the *painted image*, not the letterboxed CSS element. This adjusts
+  // only where the guide is drawn; the video/model/tracking canvas are untouched.
+  function watchContainedFrame(viewport, video, guide) {
+    const view = viewport.ownerDocument.defaultView;
+    let boxWidth = viewport.clientWidth, boxHeight = viewport.clientHeight;
+    const refresh = () => {
+      const fit = containedFrame(boxWidth, boxHeight, video.videoWidth, video.videoHeight);
+      if (!fit) { delete guide.dataset.frameFit; return; }
+      guide.style.setProperty('--fit-x', fit.x.toFixed(2) + 'px');
+      guide.style.setProperty('--fit-y', fit.y.toFixed(2) + 'px');
+      guide.style.setProperty('--fit-height', fit.height.toFixed(2) + 'px');
+      guide.dataset.frameFit = 'ready';
+    };
+    const updateSize = (width, height) => {
+      boxWidth = width; boxHeight = height;
+      refresh();
+    };
+    const viewportResize = () => updateSize(viewport.clientWidth, viewport.clientHeight);
+    const observer = typeof view.ResizeObserver === 'function' ? new view.ResizeObserver(entries => {
+      const rect = entries[0]?.contentRect;
+      if (rect) updateSize(rect.width, rect.height);
+    }) : null;
+    if (observer) observer.observe(viewport);
+    else view.addEventListener('resize', viewportResize);
+    for (const name of ['loadedmetadata', 'resize', 'emptied']) video.addEventListener(name, refresh);
+    refresh();
+    return () => {
+      observer?.disconnect();
+      if (!observer) view.removeEventListener('resize', viewportResize);
+      for (const name of ['loadedmetadata', 'resize', 'emptied']) video.removeEventListener(name, refresh);
+    };
+  }
+
+  const api = { STARTER_POSES, starterForRound, rankImage, wheelLabel, containedFrame, watchContainedFrame };
   if(typeof module !== 'undefined' && module.exports) module.exports=api; else globalThis.RoulettePresentation=api;
 })();

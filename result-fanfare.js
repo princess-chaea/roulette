@@ -2,22 +2,47 @@
 (() => {
   'use strict';
   const themes = Object.freeze({
-    1: Object.freeze({ name: 'gold', count: 46, colors: ['#a34800', '#ffda4d', '#ff9b20', '#fff2a0', '#d85113'] }),
+    1: Object.freeze({ name: 'gold', count: 132, colors: ['#a34800', '#ffda4d', '#ff9b20', '#fff2a0', '#d85113'] }),
     2: Object.freeze({ name: 'silver', count: 32, colors: ['#4463b5', '#70ccff', '#dae9ff', '#93a8f2', '#0e8ed0'] }),
     3: Object.freeze({ name: 'bronze', count: 24, colors: ['#a34125', '#ffc16e', '#ea7d4c', '#fff0bf', '#cc572b'] })
   });
+
+  const lighterThemes = [
+    { name:'mint', type:'leaf', colors:['#49997d','#77bfa3','#ceeede','#2b8a76'] },
+    { name:'sky', type:'diamond', colors:['#488ab5','#85c5e9','#cfedff','#4d86b1'] },
+    { name:'violet', type:'star', colors:['#8565ad','#b9a2e3','#e4d9ff','#926acb'] },
+    { name:'peach', type:'ribbon', colors:['#bb6c52','#ffb58e','#f8d4af','#cc7c5c'] },
+    { name:'rose', type:'diamond', colors:['#b65f86','#e8a6c2','#ffd6e2','#d27ba2'] },
+    { name:'lime', type:'leaf', colors:['#779940','#afca6d','#e5efac','#9eb953'] },
+    { name:'ocean', type:'star', colors:['#247b8f','#68bcc4','#c1ebee','#3d95a6'] },
+    { name:'plum', type:'ribbon', colors:['#905d9e','#c09bd2','#eacbed','#9b73b0'] },
+    { name:'honey', type:'ember', colors:['#aa8038','#d7b568','#fae9b3','#c19649'] }
+  ].map(theme => ({ ...theme, count: 16, light: true }));
+  const themeFor = rank => Number.isInteger(rank) && rank > 0
+    ? themes[rank] || lighterThemes[(rank - 4) % lighterThemes.length] : null;
+
+  const goldBursts = [[11, 23], [90, 20], [27, 46], [75, 43], [11, 73], [91, 72], [45, 11], [56, 92]];
 
   function particleFor(theme, i) {
     const angle = i * 2.39996323;
     const direction = i % 2 ? 1 : -1;
     const hue = theme.colors[i % theme.colors.length];
     if (theme.name === 'gold') {
-      const radius = 95 + (i * 19 % 106);
-      return { x: i % 3 ? 50 : 50 + 24 * direction, y: i % 3 ? 30 : 20,
-        dx: Math.cos(angle) * radius, dy: Math.sin(angle) * radius * .88 + 28,
-        turn: direction * (170 + i * 31 % 460), time: 1100 + i * 47 % 900,
-        wait: i < 20 ? 0 : 160 + i * 23 % 330, size: 6 + i * 11 % 11 + i % 4 * 3,
-        type: i % 5 === 0 ? 'star' : 'ribbon', hue };
+      if (i >= 104) {
+        return { x: (i * 19 + 5) % 100, y: 2 + i * 13 % 16,
+          dx: direction * (6 + i % 10), dy: 74 + i * 13 % 24, unitX: 'vw', unitY: 'vh',
+          turn: direction * (320 + i * 31 % 740), time: 1700 + i * 47 % 1000,
+          wait: i % 4 ? 100 + i * 31 % 430 : 0, size: 7 + i * 11 % 13,
+          type: i % 5 === 0 ? 'star' : 'ribbon', hue };
+      }
+      const [x, y] = goldBursts[i % goldBursts.length];
+      const spoke = Math.floor(i / goldBursts.length);
+      const heading = spoke * 2 * Math.PI / 13 + (i % goldBursts.length) * .35;
+      const radius = 9 + i * 13 % 21;
+      return { x, y, dx: Math.cos(heading) * radius, dy: Math.sin(heading) * radius + 4,
+        unitX: 'vmin', unitY: 'vmin', turn: direction * (180 + i * 31 % 670),
+        time: 1150 + i * 47 % 1060, wait: spoke < 5 ? 0 : 90 + i * 23 % 360,
+        size: 6 + i * 11 % 14, type: i % 5 === 0 ? 'star' : i % 3 === 0 ? 'streak' : 'ribbon', hue };
     }
     if (theme.name === 'silver') {
       const y = 11 + i * 17 % 49;
@@ -26,6 +51,13 @@
         turn: direction * (70 + i * 19 % 270), time: 850 + i * 41 % 650,
         wait: i < 8 ? 0 : i * 28 % 380, size: 6 + i * 17 % 15,
         type: i % 5 === 0 ? 'star' : 'diamond', hue };
+    }
+    if (theme.light) {
+      return { x: 46 + direction * (8 + i * 11 % 29), y: 37 + i * 17 % 24,
+        dx: direction * (17 + i * 11 % 56), dy: -(29 + i * 19 % 60),
+        turn: direction * (40 + i * 17 % 125), time: 670 + i * 43 % 640,
+        wait: i < 7 ? 0 : i * 23 % 270, size: 5 + i * 11 % 10,
+        type: i % 5 === 0 ? 'star' : theme.type, hue };
     }
     return { x: 50 + direction * (20 + i * 11 % 20), y: 59 + i * 13 % 26,
       dx: direction * (8 + i * 11 % 67), dy: -(80 + i * 27 % 138),
@@ -40,9 +72,11 @@
     dialog.dataset.resultRank = String(rank);
     dialog.querySelector('.result-fanfare')?.remove();
     delete dialog.dataset.fanfare;
-    const theme = Number.isInteger(rank) ? themes[rank] : null;
+    delete dialog.dataset.fanfareTier;
+    const theme = themeFor(rank);
     if (!theme) return true;
     dialog.dataset.fanfare = theme.name;
+    if (theme.light) dialog.dataset.fanfareTier = 'light';
     const doc = dialog.ownerDocument;
     const layer = doc.createElement('div');
     layer.className = 'result-fanfare';
@@ -52,12 +86,20 @@
       effect.className = className;
       layer.append(effect);
     }
+    if (theme.name === 'gold') goldBursts.forEach(([x, y], i) => {
+      const burst = doc.createElement('span');
+      burst.className = 'fanfare-salute';
+      burst.style.setProperty('--x', x + '%');
+      burst.style.setProperty('--y', y + '%');
+      burst.style.setProperty('--wave-time', (950 + i * 53) + 'ms');
+      layer.append(burst);
+    });
     for (let i = 0; i < theme.count; i++) {
-      const { type, x, y, dx, dy, turn, time, wait, size, hue } = particleFor(theme, i);
+      const { type, x, y, dx, dy, unitX = 'px', unitY = 'px', turn, time, wait, size, hue } = particleFor(theme, i);
       const piece = doc.createElement('span');
       piece.className = 'fanfare-piece ' + type;
       for (const [key, value] of Object.entries({
-        '--x': x + '%', '--y': y + '%', '--dx': dx.toFixed(1) + 'px', '--dy': dy.toFixed(1) + 'px',
+        '--x': x + '%', '--y': y + '%', '--dx': dx.toFixed(1) + unitX, '--dy': dy.toFixed(1) + unitY,
         '--turn': turn + 'deg', '--time': time + 'ms', '--wait': wait + 'ms',
         '--piece': size + 'px', '--hue': hue
       })) piece.style.setProperty(key, value);

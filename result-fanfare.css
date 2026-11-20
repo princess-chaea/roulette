@@ -1,13 +1,52 @@
 /* Shared by the main result dialog and its second-monitor mirror. */
-dialog[data-fanfare] {
-  isolation: isolate;
-  border: 2px solid var(--medal-edge);
-  color: #20362c;
-  background: radial-gradient(ellipse at 50% 26%, var(--medal-glow) 0%, var(--medal-pale) 47%, #fff 84%);
-  box-shadow: 0 16px 80px var(--medal-shadow), 0 0 0 5px var(--medal-outline), 0 0 65px var(--medal-outline);
+/* The native top-layer dialog occupies the whole viewport. A separate
+   panel surface sits under the effects, with readable/clickable content above. */
+dialog[open]:is(.result-dialog,.result) {
+  --result-inset:clamp(8px,1.7vmin,20px);
+  --result-round:clamp(16px,3vmin,32px);
+  position:fixed; inset:0; width:100%; height:100%; height:100dvh;
+  max-width:none; max-height:none; margin:0; padding:var(--result-inset);
+  border:0; box-shadow:none; background:transparent; color:#20362c; overflow:hidden;
+  display:grid; grid-template:minmax(0,1fr)/minmax(0,1fr); isolation:isolate;
+}
+dialog[open]:is(.result-dialog,.result)::before {
+  content:""; position:absolute; inset:var(--result-inset); z-index:0; pointer-events:none;
+  border-radius:var(--result-round); border:2px solid var(--medal-edge,#d5e0cc);
+  background:radial-gradient(ellipse at 50% 26%,var(--medal-glow,#edf7e5) 0%,var(--medal-pale,#fafcf6) 48%,#fff 84%);
+  box-shadow:0 16px 80px var(--medal-shadow,#173d3530),0 0 0 4px var(--medal-outline,#b6ccaa50);
+}
+dialog[open]:is(.result-dialog,.result) > .result-content {
+  position:relative; z-index:2; width:100%; height:100%; min-width:0; min-height:0;
+  display:grid; grid-template-rows:minmax(0,1fr) auto auto auto auto; justify-items:center; align-items:center;
+  gap:clamp(3px,1.1vmin,10px); padding:clamp(11px,3vmin,27px); overflow:auto;
+  border-radius:var(--result-round); text-align:center; overscroll-behavior:contain;
+}
+dialog[open]:is(.result-dialog,.result) > .result-content > img {
+  display:block; width:min(88%,52vh,610px); width:min(88%,52dvh,610px);
+  height:100%; min-height:0; max-height:52dvh; margin:0; object-fit:contain;
+}
+dialog[open]:is(.result-dialog,.result) .fanfare-rank {
+  font-size:clamp(21px,min(5vw,7vh),60px); font-weight:750; line-height:1.08;
+  text-shadow:0 1px 2px #fff; margin:0; color:var(--medal-ink,#537149);
+}
+dialog[open]:is(.result-dialog,.result) h2 {
+  min-width:0; max-width:96%; margin:0; font-size:clamp(23px,min(6.2vw,8vh),78px); line-height:1.13;
+  color:var(--medal-ink,#20362c); overflow-wrap:anywhere; text-shadow:0 2px 7px #fff,0 0 3px #fff;
+}
+dialog[open]:is(.result-dialog,.result) .result-saved {
+  margin:0; font-size:clamp(10px,1.8vh,15px); line-height:1.3; color:#476144;
+}
+dialog[open]:is(.result-dialog,.result) > .result-content > button:not(.dialog-close) {
+  grid-row:5; width:min(92%,480px); min-height:42px; margin:0; padding:clamp(8px,1.6vh,16px);
+  font-size:clamp(17px,2.5vh,28px); line-height:1.2; border-radius:10px;
+}
+dialog[open]:is(.result-dialog,.result) .dialog-close {
+  position:absolute; top:7px; right:7px; z-index:1; width:36px; height:36px; padding:0;
+  border:1px solid #47614444; border-radius:50%; background:#fffffff0; color:#284334;
+  font-size:23px; line-height:1;
 }
 dialog[data-fanfare]::backdrop {
-  background: radial-gradient(ellipse at 50% 43%, var(--medal-backlight), #071421dc 75%);
+  background: radial-gradient(ellipse at 50% 43%, var(--medal-backlight,#385849a6), #071421dc 75%);
 }
 dialog[data-fanfare="gold"] {
   --medal-glow:#fff1a6; --medal-pale:#fff8e0; --medal-ink:#7e3800; --medal-edge:#efa821;
@@ -21,11 +60,23 @@ dialog[data-fanfare="bronze"] {
   --medal-glow:#ffd7af; --medal-pale:#fff1e6; --medal-ink:#83351c; --medal-edge:#c97a49;
   --medal-outline:#eb986747; --medal-backlight:#884d39b3; --medal-shadow:#2a0b0088;
 }
-dialog[data-fanfare] > .result-content { position:relative; z-index:1; }
-dialog[data-fanfare] .fanfare-rank {
+dialog[data-fanfare="mint"] { --medal-glow:#dbf7e8; --medal-pale:#f1fbf4; --medal-ink:#2c634d; --medal-edge:#91c9b0; }
+dialog[data-fanfare="sky"] { --medal-glow:#def2ff; --medal-pale:#f0faff; --medal-ink:#285170; --medal-edge:#9fcce3; }
+dialog[data-fanfare="violet"] { --medal-glow:#ece2fa; --medal-pale:#f8f3ff; --medal-ink:#53396f; --medal-edge:#bca6da; }
+dialog[data-fanfare="peach"] { --medal-glow:#ffe6d8; --medal-pale:#fff5ec; --medal-ink:#7b462d; --medal-edge:#e1ae91; }
+dialog[data-fanfare="rose"] { --medal-glow:#ffe4ed; --medal-pale:#fff2f6; --medal-ink:#793c58; --medal-edge:#e2adc4; }
+dialog[data-fanfare="lime"] { --medal-glow:#eef6c9; --medal-pale:#f8fbea; --medal-ink:#4e6427; --medal-edge:#b7cb83; }
+dialog[data-fanfare="ocean"] { --medal-glow:#daf4f5; --medal-pale:#eefafb; --medal-ink:#265d6b; --medal-edge:#93cdd5; }
+dialog[data-fanfare="plum"] { --medal-glow:#f0e4f5; --medal-pale:#fbf4fc; --medal-ink:#654274; --medal-edge:#c5a5d2; }
+dialog[data-fanfare="honey"] { --medal-glow:#fff3cd; --medal-pale:#fffbef; --medal-ink:#775a23; --medal-edge:#d6be80; }
+[data-fanfare-tier="light"] .fanfare-halo {
+  width:min(68%,380px); background:radial-gradient(circle,var(--medal-glow) 0 20%,transparent 66%);
+}
+[data-fanfare-tier="light"] .fanfare-wave { border-width:1px; border-style:dotted; opacity:.32; }
+.fanfare-piece.leaf { border-radius:80% 9% 80% 13%; }
+dialog[open][data-fanfare] .fanfare-rank {
   display:table;
-  margin:8px auto 12px;
-  padding:.38em .84em;
+  padding:.24em .66em;
   border:1px solid var(--medal-edge);
   border-radius:999px;
   background:#fffffff2;
@@ -38,18 +89,20 @@ dialog[data-fanfare] .fanfare-rank::before, dialog[data-fanfare] .fanfare-rank::
   margin:0 .35em;
   color:var(--medal-ink);
 }
-dialog[data-fanfare="gold"] .fanfare-rank { border-width:2px; padding:.42em 1.04em; }
+dialog[data-fanfare="gold"] .fanfare-rank { border-width:2px; padding:.25em .72em; }
 dialog[data-fanfare="silver"] .fanfare-rank::before, dialog[data-fanfare="silver"] .fanfare-rank::after { content:"◆"; font-size:.76em; }
 dialog[data-fanfare="bronze"] .fanfare-rank::before, dialog[data-fanfare="bronze"] .fanfare-rank::after { content:"✧"; }
 dialog[data-fanfare] h2 { color:var(--medal-ink); }
 .result-fanfare {
-  position:absolute; z-index:0; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none;
+  position:absolute; z-index:1; inset:var(--result-inset); border-radius:var(--result-round); overflow:hidden; pointer-events:none;
   --travel:1;
 }
-.fanfare-halo, .fanfare-wave, .fanfare-piece { position:absolute; display:block; pointer-events:none; }
+[data-fanfare="gold"] .result-fanfare { inset:0; border-radius:0; }
+.fanfare-halo, .fanfare-wave, .fanfare-piece, .fanfare-salute { position:absolute; display:block; pointer-events:none; }
 .fanfare-halo, .fanfare-wave { left:50%; top:25%; transform:translate(-50%,-50%); }
 .fanfare-halo { width:min(85%,440px); aspect-ratio:1; opacity:.68; }
 [data-fanfare="gold"] .fanfare-halo {
+  width:min(112vmin,1160px); top:42%;
   background:
     radial-gradient(circle, #fff3bd 0 19%, transparent 54%),
     repeating-conic-gradient(from 7deg, #fff8d398 0 8deg, transparent 8deg 28deg);
@@ -87,6 +140,19 @@ dialog[data-fanfare] h2 { color:var(--medal-ink); }
 .fanfare-piece.ribbon { width:calc(var(--piece) * .58); height:calc(var(--piece) * 1.3); border-radius:2px; }
 .fanfare-piece.diamond { clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); }
 .fanfare-piece.ember { border-radius:50%; box-shadow:0 0 10px var(--hue); }
+.fanfare-piece.streak { width:calc(var(--piece) * .36); height:calc(var(--piece) * 1.75); border-radius:999px; box-shadow:0 0 9px var(--hue); }
+[data-fanfare="gold"] .fanfare-piece:is(.star,.streak) { filter:drop-shadow(0 0 5px var(--hue)); }
+.fanfare-salute {
+  top:var(--y); left:var(--x); width:32vmin; aspect-ratio:1; border-radius:50%;
+  border:2px solid #ffd56a; box-shadow:0 0 19px #ffad4a80,inset 0 0 14px #fff3a480;
+  opacity:0; transform:translate(-50%,-50%);
+}
+dialog[open][data-fanfare="gold"] .fanfare-salute { animation:fanfare-salute var(--wave-time) cubic-bezier(.12,.54,.28,1) forwards; }
+@keyframes fanfare-salute {
+  0% { opacity:.84; transform:translate(-50%,-50%) scale(.10); }
+  45% { opacity:.66; }
+  100% { opacity:0; transform:translate(-50%,-50%) scale(1.25); }
+}
 dialog[open][data-fanfare] .fanfare-piece {
   animation:fanfare-burst var(--time) cubic-bezier(.12,.55,.24,1) var(--wait) forwards;
 }
@@ -101,6 +167,12 @@ dialog[open][data-fanfare] .fanfare-wave { animation:fanfare-ripple .88s ease-ou
 dialog[open][data-fanfare] .fanfare-wave.echo { animation-delay:.12s; }
 dialog[open][data-fanfare="silver"] .fanfare-wave { animation-name:fanfare-silver-ripple; }
 dialog[open][data-fanfare="bronze"] .fanfare-wave { animation-duration:1.22s; }
+dialog[open][data-fanfare-tier="light"] .fanfare-piece { animation-name:fanfare-light-sprinkle; }
+@keyframes fanfare-light-sprinkle {
+  0% { opacity:.50; transform:scale(.48) rotate(0); }
+  27% { opacity:.82; }
+  100% { opacity:0; transform:translate(calc(var(--dx) * var(--travel)),calc(var(--dy) * var(--travel))) rotate(var(--turn)) scale(.52); }
+}
 @keyframes fanfare-burst {
   0% { opacity:.78; transform:scale(.28) rotate(0); }
   13% { opacity:1; }
@@ -132,11 +204,25 @@ dialog[open][data-fanfare="bronze"] .fanfare-wave { animation-duration:1.22s; }
   to { opacity:.68; transform:translate(-50%,-50%) scale(1) rotate(8deg); }
 }
 @media (max-width:480px) {
-  .result-fanfare { --travel:.76; }
+  .result-fanfare { --travel:.82; }
+  dialog[open]:is(.result-dialog,.result) > .result-content { padding:clamp(8px,2.6vw,16px); }
+}
+@media (max-height:500px) and (min-width:540px) {
+  dialog[open]:is(.result-dialog,.result) > .result-content {
+    grid-template-columns:minmax(0,1fr) minmax(0,1.15fr); grid-template-rows:repeat(4,auto);
+    align-content:center; padding-inline:clamp(14px,3vw,40px);
+  }
+  dialog[open]:is(.result-dialog,.result) > .result-content > img {
+    grid-column:1; grid-row:1/5; width:min(96%,73dvh); max-height:73dvh;
+  }
+  dialog[open]:is(.result-dialog,.result) .fanfare-rank { grid-column:2; grid-row:1; }
+  dialog[open]:is(.result-dialog,.result) h2 { grid-column:2; grid-row:2; font-size:clamp(22px,8vh,50px); }
+  dialog[open]:is(.result-dialog,.result) .result-saved { grid-column:2; grid-row:3; }
+  dialog[open]:is(.result-dialog,.result) > .result-content > button:not(.dialog-close) { grid-column:2; grid-row:4; }
 }
 @media (prefers-reduced-motion: reduce) {
-  dialog[open][data-fanfare] :is(.fanfare-piece,.fanfare-wave,.fanfare-halo) {
+  dialog[open][data-fanfare] :is(.fanfare-piece,.fanfare-wave,.fanfare-halo,.fanfare-salute) {
     animation:none !important; transition:none !important;
   }
-  .fanfare-piece { display:none; }
+  .fanfare-piece,.fanfare-salute { display:none; }
 }

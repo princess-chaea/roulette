@@ -11,6 +11,7 @@
     view = null;
     current.popup.cancelAnimationFrame(current.frame);
     current.observer?.disconnect();
+    current.stopWatchingFit?.();
     announce(false);
   }
 
@@ -61,14 +62,23 @@
       header .brand { display:flex; align-items:center; gap:6px; font:700 clamp(16px,2.5vw,25px) SchoolPoster,KERISBaeum,sans-serif; white-space:nowrap; }
       header .brand img { width:36px; height:36px; object-fit:contain; }
       header .research-logo { width:clamp(108px,28vw,217px); max-width:47%; max-height:40px; object-fit:contain; object-position:right; }
-      main { --rail:clamp(120px,16vw,176px); display:grid; grid-template-columns:var(--rail) minmax(0,1fr) var(--rail); grid-template-rows:minmax(0,1fr); min-height:0; gap:8px; padding:8px; }
-      .feed { position:relative; grid-area:1/2; display:grid; place-items:center; min-height:0; overflow:hidden; }
+      main { display:grid; grid-template:minmax(0,1fr)/minmax(0,1fr); min-height:0; padding:4px; }
+      .feed { position:relative; display:grid; place-items:center; min-height:0; overflow:hidden; }
       canvas { position:absolute; inset:0; height:100%; width:100%; object-fit:contain; }
       .waiting { padding:1rem; color:#edf5d7; font-size:clamp(18px,3vw,31px); text-align:center; }
-      .guide-panel { grid-area:1/3; align-self:end; min-width:0; padding:9px; border:1px solid #ffffffad; border-radius:12px; background:#f7faefdf; pointer-events:none; }
-      .guide-panel img { display:block; width:min(100%,100px); margin:0 auto 5px; aspect-ratio:1; object-fit:contain; }
-      h1 { margin:0; font:700 clamp(14px,1.6vw,18px)/1.35 SchoolPoster,KERISBaeum,sans-serif; }
-      p { margin:.35em 0 0; font-size:clamp(12px,1.35vw,17px); line-height:1.4; }
+      .guide-bounds { position:absolute; inset:var(--fit-y,0px) var(--fit-x,0px); z-index:1; display:flex; align-items:flex-end; justify-content:center; visibility:hidden; pointer-events:none; container-type:inline-size; }
+      .guide-bounds[data-frame-fit="ready"] { visibility:visible; }
+      .feed-tracking { z-index:2; pointer-events:none; }
+      .guide-panel { display:grid; grid-template-columns:minmax(0,1fr) auto minmax(0,1fr); align-items:end; width:min(94%,520px); min-width:0; gap:clamp(4px,1.2cqw,9px); margin:3px; color:#fff; }
+      .guide-panel img { grid-column:2; grid-row:1; display:block; width:auto; height:clamp(25px,calc(var(--fit-height,240px) * .21),148px); max-width:36cqw; aspect-ratio:1; object-fit:contain; background:#faffebc9; border:1px solid #fff9; border-radius:12px; padding:2px; }
+      .guide-panel > div { grid-column:3; grid-row:1; padding:clamp(4px,.85cqw,8px); min-width:0; border:1px solid #f4fff468; border-radius:9px; background:#102720df; box-shadow:0 4px 14px #0006; }
+      .guide-bounds[data-motion-stage="circle"] .guide-panel img { height:clamp(25px,calc(var(--fit-height,240px) * .18),128px); }
+      h1 { margin:0; font:700 clamp(12px,2.5cqw,22px)/1.25 SchoolPoster,KERISBaeum,sans-serif; overflow-wrap:anywhere; }
+      p { margin:.35em 0 0; font-size:clamp(11px,1.65cqw,15px); line-height:1.35; }
+      .guide-bounds[data-motion-stage="presence"] .guide-panel { position:absolute; top:81%; bottom:auto; left:50%; transform:translateX(-50%); display:block; width:max-content; max-width:96%; margin:0; }
+      .guide-bounds[data-motion-stage="presence"] .guide-panel > div { padding:clamp(3px,1cqw,8px) clamp(7px,2cqw,16px); text-align:center; }
+      .guide-bounds[data-motion-stage="presence"] h1 { font-size:clamp(12px,3.45cqw,32px); line-height:1.16; word-break:keep-all; }
+      .guide-bounds[data-motion-stage="presence"] p { display:none; }
       footer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(8px,1.5vw,22px); padding:8px clamp(10px,2vw,24px); background:#fafbf3; }
       .feedback { margin:0 0 3px; color:#557047; }
       progress { width:100%; height:8px; accent-color:#6d914c; }
@@ -81,14 +91,12 @@
       .result .rank { color:#6b8758; font-weight:700; font-size:clamp(18px,2.5vw,26px); }
       .result button { width:100%; background:#173d35; color:white; border:0; padding:18px; font-size:20px; }
       @media (max-width:650px) {
-        main { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; }
-        .feed { grid-area:1/1; }
-        .guide-panel { grid-area:2/1; justify-self:end; display:flex; align-items:center; gap:6px; width:min(100%,400px); padding:5px; }
-        .guide-panel img { width:48px; margin:0; flex-shrink:0; }
         footer { gap:5px; }
         nav { max-width:11rem; }
       }
-      @media (max-height:470px) { .guide-panel img { max-width:58px; } }
+      @container (max-width:450px) {
+        .guide-panel p { display:none; }
+      }
     `);
 
     // Share the exact same scene stylesheet. Copy loaded rules to avoid
@@ -122,9 +130,15 @@
     const canvas = element('canvas', feed);
     canvas.setAttribute('aria-label', '거울 카메라 영상과 동작 인식 표시');
     const context = canvas.getContext('2d');
+    const tracking = element('canvas', feed);
+    tracking.className = 'feed-tracking';
+    tracking.setAttribute('aria-hidden', 'true');
+    const trackingContext = tracking.getContext('2d');
     const waiting = element('div', feed);
     waiting.className = 'waiting';
-    const guidePanel = element('aside', stage);
+    const guideBounds = element('div', feed);
+    guideBounds.className = 'guide-bounds';
+    const guidePanel = element('aside', guideBounds);
     guidePanel.className = 'guide-panel';
     guidePanel.setAttribute('aria-label', '현재 동작 안내');
     const guide = element('img', guidePanel);
@@ -168,6 +182,10 @@
     result.setAttribute('aria-labelledby', 'camera-result-prize');
     const resultContent = element('div', result);
     resultContent.className = 'result-content';
+    const closeResult = element('button', resultContent, '×');
+    closeResult.className = 'dialog-close';
+    closeResult.setAttribute('aria-label', '당첨 결과 닫기');
+    closeResult.onclick = () => source('result-dialog').close();
     const resultArt = element('img', resultContent);
     const resultRank = element('p', resultContent); resultRank.className = 'rank fanfare-rank';
     const resultPrize = element('h2', resultContent); resultPrize.id = 'camera-result-prize';
@@ -185,6 +203,7 @@
     }
     const video = source('camera-video');
     const overlay = source('tracking-overlay');
+    current.stopWatchingFit = RoulettePresentation.watchContainedFrame(feed, video, guideBounds);
     function syncInstructions() {
       syncResult();
       title.textContent = source('gesture-title').textContent;
@@ -195,13 +214,14 @@
       if (guide.src !== originalGuide.src) guide.src = originalGuide.src;
       guide.hidden = originalGuide.hidden;
       guidePanel.hidden = source('live-guide').hidden;
+      guideBounds.dataset.motionStage = source('camera-guide-bounds').dataset.motionStage;
       connect.textContent = source('camera-button-label').textContent;
       connect.disabled = source('connect-camera').disabled;
       restart.disabled = source('restart-camera').disabled;
       waiting.textContent = source('camera-status').textContent === '준비 중' ? '카메라를 준비하고 있어요…' : '카메라를 연결해 주세요.';
     }
     current.observer = new MutationObserver(syncInstructions);
-    current.observer.observe(source('camera-preview').closest('.camera-card'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'src', 'disabled', 'aria-valuenow'] });
+    current.observer.observe(source('camera-preview').closest('.camera-card'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'src', 'disabled', 'aria-valuenow', 'data-motion-stage'] });
     current.observer.observe(source('result-dialog'), { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['open','data-result-id'] });
     syncInstructions();
 
@@ -210,13 +230,16 @@
       const live = !video.hidden && video.readyState >= 2 && video.videoWidth > 0;
       waiting.hidden = live;
       canvas.hidden = !live;
+      tracking.hidden = !live;
       if (live) {
         const width = video.videoWidth, height = video.videoHeight;
         if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
         context.setTransform(-1, 0, 0, 1, width, 0);
         context.drawImage(video, 0, 0, width, height);
         context.resetTransform();
-        if (!overlay.hidden && overlay.width && overlay.height) context.drawImage(overlay, 0, 0, width, height);
+        if (tracking.width !== width || tracking.height !== height) { tracking.width = width; tracking.height = height; }
+        trackingContext.clearRect(0, 0, width, height);
+        if (!overlay.hidden && overlay.width && overlay.height) trackingContext.drawImage(overlay, 0, 0, width, height);
       }
       current.frame = popup.requestAnimationFrame(render);
     }

@@ -6,17 +6,18 @@
   <meta name="theme-color" content="#173d35">
   <title>모션 룰렛</title>
   <link rel="icon" type="image/png" href="assets/art/roulette-logo.png">
-  <link rel="stylesheet" href="styles.css?v=20261120f">
-  <link id="result-fanfare-style" rel="stylesheet" href="result-fanfare.css?v=20261120c">
+  <link rel="stylesheet" href="styles.css?v=20261120i">
+  <link id="result-fanfare-style" rel="stylesheet" href="result-fanfare.css?v=20261120h">
   <script src="roulette.js" defer></script>
-  <script src="presentation.js?v=20261120b" defer></script>
+  <script src="presentation.js?v=20261120h" defer></script>
   <script src="motion-gestures.js?v=20261120b" defer></script>
   <script src="motion-input.js?v=20261120b" defer></script>
   <script src="motion-camera.js?v=20261120b" defer></script>
-  <script src="result-fanfare.js?v=20261120c" defer></script>
-  <script src="camera-window.js?v=20261120e" defer></script>
+  <script src="result-fanfare.js?v=20261120h" defer></script>
+  <script src="camera-window.js?v=20261120h" defer></script>
   <script src="operator-mode.js" defer></script>
-  <script src="app.js?v=20261120e" defer></script>
+  <script src="spin-audio.js?v=20261120i" defer></script>
+  <script src="app.js?v=20261120i" defer></script>
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true"><defs>
@@ -88,6 +89,7 @@
         <button class="button manual-button" id="manual-spin" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>버튼으로 돌리기</button>
         <button class="button secondary" id="open-camera-window" type="button" aria-label="카메라 새 창" title="카메라 새 창"><svg aria-hidden="true"><use href="#i-pip"/></svg></button>
         <button class="button secondary" id="roulette-fullscreen" type="button" aria-label="전체화면" title="전체화면"><svg aria-hidden="true"><use href="#i-fullscreen"/></svg></button>
+        <button class="button secondary" id="toggle-sound" type="button" aria-label="효과음" aria-pressed="true">소리 켜짐</button>
         <span id="display-message" role="status"></span>
       </div>
       <p id="draw-error" class="form-message" role="status"></p>
@@ -109,11 +111,13 @@
                 <canvas id="tracking-overlay" hidden aria-label="감지된 팔 위치와 동작 안내 원"></canvas>
                 <div class="camera-empty" id="camera-empty"><img id="pose-guide" class="guide-image" src="assets/art/pose-guide.png" alt="양손을 머리 위로 든 새싹 캐릭터"><img id="circle-guide" class="guide-image" src="assets/art/circle-guide.png" alt="한 손으로 원을 그리는 새싹 캐릭터" hidden><span>카메라를 연결하고 행운을 시작해요</span></div>
                 <span class="camera-label" id="camera-label"><i></i><span id="camera-label-text">카메라 대기 중</span></span>
+                <div class="camera-guide-bounds" id="camera-guide-bounds" data-motion-stage="presence">
+                  <aside class="live-guide" id="live-guide" aria-label="현재 동작 안내" hidden>
+                    <img id="live-guide-image" src="assets/art/pose-guide.png" alt="">
+                    <div><h3 id="gesture-title">화면 가운데에서 1초 동안 기다려 주세요.</h3><p id="gesture-description">머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.</p></div>
+                  </aside>
+                </div>
               </div>
-              <aside class="live-guide" id="live-guide" aria-label="현재 동작 안내" hidden>
-                <img id="live-guide-image" src="assets/art/pose-guide.png" alt="">
-                <div><h3 id="gesture-title">화면 가운데에서 1초 동안 기다려 주세요.</h3><p id="gesture-description">머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.</p></div>
-              </aside>
             </div>
             <div class="camera-bottom">
               <div class="camera-meter"><div class="camera-feedback"><span id="camera-feedback" aria-live="polite">카메라 연결 후 화면 가운데에 서 주세요.</span><span id="progress-number">0%</span></div><div class="progress-track" role="progressbar" aria-label="동작 인식 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="motion-progress"><span id="progress-fill"></span></div></div>
