@@ -10,7 +10,8 @@
     one_hand_up: '한 손만 머리 위로 들어 주세요.',
     arm_heart: '팔꿈치를 양옆으로 펴고 머리 위에서 두 손을 모아 큰 하트를 만들어 주세요.'
   };
-  const DEFAULTS = { confidence: 0.55, presenceHoldMs: 2000, poseHoldMs: 1000, startHoldMs: 150, maxFrameGapMs: 350 };
+  const PRESENCE_HINT = '화면 가운데에서 1초 동안 기다려 주세요.';
+  const DEFAULTS = { confidence: 0.55, presenceHoldMs: 1000, poseHoldMs: 1000, startHoldMs: 150, maxFrameGapMs: 350 };
   const status = (message, progress = 0, extra = {}) => ({ message, progress, matched: false, ...extra });
   // Mirrored, normalized hand coordinates; idle handles sit at the guide start.
   // On body loss no guide exists, so x/y are null. Positive angleDeg is clockwise.
@@ -448,7 +449,7 @@
         const held = time - this.presenceStart;
         if (held < this.tuning.presenceHoldMs) {
           const progress = Math.floor(100 * held / this.tuning.presenceHoldMs);
-          this.lastResult = status('화면 가운데에서 2초 동안 기다려 주세요.', progress, { mode: this.mode, ...idleGrip() });
+          this.lastResult = status(PRESENCE_HINT, progress, { mode: this.mode, ...idleGrip() });
           return this.lastResult;
         }
         this.mode = 'pose';
@@ -467,7 +468,7 @@
     }
   }
 
-  const api = { GestureDetector, MotionFlow, POSE_KINDS };
+  const api = { GestureDetector, MotionFlow, POSE_KINDS, PRESENCE_HINT };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.MotionGestures = api;
 })();

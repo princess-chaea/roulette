@@ -210,7 +210,7 @@
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
     $('live-guide').hidden = !camera?.running || mode === 'presence';
-    $('gesture-title').textContent = mode === 'presence' ? '화면 가운데에서 2초만 기다려 주세요!' : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
+    $('gesture-title').textContent = mode === 'presence' ? MotionGestures.PRESENCE_HINT : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
     $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '손잡이를 잡은 뒤 크게 한 바퀴 휘둘러 주세요. 원을 맞춰 그리지 않아도 되고, 손이 잠깐 안 보여도 이어집니다.';
   }
   function setProgress(percent, message) {
@@ -405,7 +405,7 @@
     $('camera-video').hidden = !ready; $('tracking-overlay').hidden = !ready;
     $('camera-empty').hidden = ready;
     $('camera-error').textContent = phase === 'error' ? message : '';
-    resetAutoMotion(); setProgress(0, ready ? '화면 가운데에 2초 동안 서 주세요.' : message); updateControls();
+    resetAutoMotion(); setProgress(0, ready ? MotionGestures.PRESENCE_HINT : message); updateControls();
   }
   camera = new MotionCamera({
     video: $('camera-video'), canvas: $('tracking-overlay'), onState: cameraState,

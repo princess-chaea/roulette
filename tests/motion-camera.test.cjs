@@ -48,7 +48,8 @@ function rig(getUserMedia, createEngine) {
     navigator: { mediaDevices: { getUserMedia } }, performance: { now: () => now },
     requestAnimationFrame(callback) { frames.set(++nextId, callback); return nextId; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    MotionGestures: { GestureDetector: FakeDetector, MotionFlow: FakeDetector }
+    MotionGestures: { GestureDetector: FakeDetector, MotionFlow: FakeDetector },
+    MotionInput: require('../motion-input.js')
   };
   runInNewContext(source, sandbox, { filename: 'motion-camera.js' });
   const phases = [];

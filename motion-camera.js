@@ -16,6 +16,9 @@
     constructor({ video, canvas, onState, onResult, canRecognize }) {
       Object.assign(this, { video, canvas, onState, onResult, canRecognize });
       this.detector = new MotionGestures.MotionFlow();
+      this.participant = new MotionInput.ParticipantTracker();
+      this.exposure = new MotionInput.ExposureInput(() => document.createElement('canvas'));
+      this.recovering = false;
       this.gripImage = new Image();
       this.gripImage.src = new URL('../../art/ar-grip.png', BASE).href;
       this.stream = null; this.engine = null; this.phase = 'stopped';
@@ -25,7 +28,7 @@
     }
     get running() { return this.phase === 'ready'; }
     get connecting() { return this.phase === 'connecting'; }
-    setPoseKind(kind) { this.detector.setPoseKind(kind); this.clearOverlay(); }
+    setPoseKind(kind) { this.detector.setPoseKind(kind); this.participant.reset(); this.clearOverlay(); }
     state(phase, message) { this.phase = phase; this.onState({ phase, message }); }
     async start() {
       if (this.running || this.connecting) return;
@@ -55,7 +58,7 @@
         if (sequence !== this.sequence) return;
         this.engine = engine;
         this.lastVideoTime = -1; this.lastTime = -Infinity;
-        this.state('ready', '연결됐어요! 화면 가운데에서 2초 동안 기다려 주세요.');
+        this.state('ready', `연결됐어요! ${MotionGestures.PRESENCE_HINT}`);
         this.loop();
       } catch (error) {
         if (sequence !== this.sequence) return;
@@ -68,11 +71,14 @@
       return PoseLandmarker.createFromOptions(files, {
         baseOptions: { modelAssetPath: new URL('pose_landmarker_lite.task', BASE).href, delegate: 'CPU' },
         runningMode: 'VIDEO', numPoses: 2,
-        minPoseDetectionConfidence: .6, minPosePresenceConfidence: .6, minTrackingConfidence: .6,
+        minPoseDetectionConfidence: .50, minPosePresenceConfidence: .53, minTrackingConfidence: .56,
         outputSegmentationMasks: false
       });
     }
-    setActive(active) { this.active = active; this.detector.reset(); if (!active) this.clearOverlay(); }
+    setActive(active) {
+      this.active = active; this.detector.reset(); this.participant.reset(); this.recovering = false;
+      if (!active) this.clearOverlay();
+    }
     setAnimationHost(host = globalThis) {
       if (this.raf !== null) this.animationHost.cancelAnimationFrame(this.raf);
       this.raf = null; this.animationHost = host;
@@ -88,12 +94,26 @@
       if (time - this.lastTime < interval || this.video.currentTime === this.lastVideoTime) return;
       this.lastTime = time; this.lastVideoTime = this.video.currentTime;
       try {
-        const results = this.engine.detectForVideo(this.video, time);
-        const multiple = results.landmarks.length > 1;
-        const landmarks = results.landmarks.length === 1 ? results.landmarks[0] : null;
-        const recognition = this.detector.update(landmarks, time, this.video.videoWidth / this.video.videoHeight);
-        if (multiple) recognition.message = '한 명씩 화면 가운데 서 주세요.';
-        this.draw(landmarks, recognition);
+        const aspect = this.video.videoWidth / this.video.videoHeight;
+        const source = this.exposure.source(this.video, time, this.recovering);
+        let poses;
+        try {
+          poses = this.engine.detectForVideo(source, time).landmarks;
+        } catch (error) {
+          if (source === this.video) throw error;
+          // Some runtimes may reject a canvas source. Resume on video on the
+          // next frame so the model never sees two identical timestamps.
+          this.exposure.disable();
+          poses = [];
+        }
+        const previousMode = this.detector.mode;
+        const { points, changed, paused } = this.participant.select(poses, time, aspect, previousMode);
+        if (changed) this.detector.reset();
+        const recognition = this.detector.update(points, time, aspect);
+        if (previousMode === 'presence' && recognition.mode !== 'presence') this.participant.lock();
+        if (paused) recognition.message = '같은 참가자가 화면 가운데에 다시 보이면 이어서 진행해요.';
+        this.recovering = !points;
+        this.draw(points, recognition);
         this.onResult(recognition);
       } catch {
         this.release(); this.engine?.close(); this.engine = null; this.enginePromise = null;
@@ -185,7 +205,7 @@
     }
     clearOverlay() { const ctx = this.canvas.getContext('2d'); ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
     release() {
-      this.active = false; this.detector.reset();
+      this.active = false; this.detector.reset(); this.participant.reset(); this.exposure.reset(); this.recovering = false;
       if (this.raf !== null) this.animationHost.cancelAnimationFrame(this.raf);
       this.raf = null;
       this.stream?.getTracks().forEach(track => track.stop()); this.stream = null;

@@ -9,11 +9,12 @@
   <link rel="stylesheet" href="styles.css">
   <script src="roulette.js" defer></script>
   <script src="presentation.js" defer></script>
-  <script src="motion-gestures.js" defer></script>
-  <script src="motion-camera.js" defer></script>
+  <script src="motion-gestures.js?v=20261120" defer></script>
+  <script src="motion-input.js?v=20261120" defer></script>
+  <script src="motion-camera.js?v=20261120" defer></script>
   <script src="camera-window.js" defer></script>
   <script src="operator-mode.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=20261120" defer></script>
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true"><defs>
@@ -102,7 +103,7 @@
               <div class="live-guide" id="live-guide" hidden><span>따라 해 보세요</span><img id="live-guide-image" src="assets/art/pose-guide.png" alt="현재 목표 동작"></div>
             </div>
             <div class="camera-meter"><div class="camera-feedback"><span id="camera-feedback" aria-live="polite">카메라 연결 후 화면 가운데에 서 주세요.</span><span id="progress-number">0%</span></div><div class="progress-track" role="progressbar" aria-label="동작 인식 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="motion-progress"><span id="progress-fill"></span></div></div>
-            <div class="gesture-instruction"><span class="step-icon">✦</span><div><h3 id="gesture-title">양손을 머리 위로 올려 주세요!</h3><p id="gesture-description">자세를 1초 유지하면 룰렛이 돌아가요.</p></div></div>
+            <div class="gesture-instruction"><span class="step-icon">✦</span><div><h3 id="gesture-title">양손을 머리 위로 올려 주세요!</h3><p id="gesture-description">자세를 1초 유지한 뒤 손잡이를 돌려요.</p></div></div>
             <div class="camera-actions"><button class="button secondary full" id="connect-camera"><svg><use href="#i-camera"/></svg><span id="camera-button-label">카메라 연결</span></button><button class="button secondary camera-refresh" id="restart-camera" type="button" aria-label="카메라와 동작 인식 새로 시작" title="카메라와 동작 인식 새로 시작"><svg aria-hidden="true"><use href="#i-refresh"/></svg></button></div>
             <p id="camera-error" class="form-message" role="status"></p>
             <p class="privacy-note">영상은 이 기기에서 분석하며 녹화·업로드하지 않아요.<br>밝은 곳에서 한 명씩, 얼굴·어깨와 안내된 손을 보여 주세요.</p>

@@ -317,13 +317,13 @@ test('the same upper-body motion yields identical progress as hips and knees ent
   for (const kind of POSE_KINDS) {
     const flows = ['cropped', 'visible', 'intermittent'].map(() => new MotionFlow({ poseKind: kind }));
     let result;
-    for (let step = 0; step <= 44; step++) {
+    for (let step = 0; step <= 34; step++) {
       const p = starter(kind);
       if (kind === 'hands_up' || kind === 'one_hand_up') p[15].y = 0.21;
       if (kind === 'hands_up') p[16].y = 0.21;
-      if (step > 30) {
+      if (step > 20) {
         const { target } = result;
-        const angle = Math.max(0, step - 34) * Math.PI / 6;
+        const angle = Math.max(0, step - 24) * Math.PI / 6;
         const wrist = kind === 'hands_near_shoulders' ? 16 : 15;
         p[wrist] = point(1 - target.x - target.radius * Math.cos(angle), target.y + target.radiusY * Math.sin(angle));
       }
@@ -335,9 +335,9 @@ test('the same upper-body motion yields identical progress as hips and knees ent
       result = frames[0];
       assert.deepEqual(frames[1], result, kind);
       assert.deepEqual(frames[2], result, kind);
-      if (step === 20) assert.equal(result.mode, 'pose');
-      if (step === 30) assert.equal(result.mode, 'circle');
-      if (step === 39) assert.ok(result.progress > 0 && result.progress < 100);
+      if (step === 10) assert.equal(result.mode, 'pose');
+      if (step === 20) assert.equal(result.mode, 'circle');
+      if (step === 29) assert.ok(result.progress > 0 && result.progress < 100);
     }
     assert.equal(result.matched, true, kind);
   }
@@ -414,12 +414,12 @@ test('heart needs wide elbows and upper centered hands; a finger heart or tightl
 
 test('changing the target pose starts a fresh presence dwell and the chosen pose survives stage changes', () => {
   const flow = new MotionFlow({ poseKind: 'hands_near_shoulders' });
-  for (let t = 0; t <= 2700; t += 100) flow.update(starter('hands_near_shoulders'), t);
+  for (let t = 0; t <= 1700; t += 100) flow.update(starter('hands_near_shoulders'), t);
   assert.equal(flow.mode, 'pose');
   flow.setPoseKind('arm_heart');
-  for (let t = 2800; t < 4800; t += 100) assert.equal(flow.update(starter('arm_heart'), t).mode, 'presence');
-  for (let t = 4800; t < 5800; t += 100) assert.equal(flow.update(starter('arm_heart'), t).mode, 'pose');
-  assert.equal(flow.update(starter('arm_heart'), 5800).mode, 'circle');
+  for (let t = 1800; t < 2800; t += 100) assert.equal(flow.update(starter('arm_heart'), t).mode, 'presence');
+  for (let t = 2800; t < 3800; t += 100) assert.equal(flow.update(starter('arm_heart'), t).mode, 'pose');
+  assert.equal(flow.update(starter('arm_heart'), 3800).mode, 'circle');
   flow.reset();
   assert.equal(flow.poseKind, 'arm_heart');
   assert.throws(() => flow.setPoseKind('unknown'), RangeError);
@@ -429,18 +429,18 @@ test('changing the target pose starts a fresh presence dwell and the chosen pose
 test('upper-body presence and pose must each finish in order, and posing alone cannot start the wheel', () => {
   const flow = new MotionFlow();
   const raised = upperBody(true);
-  for (let t = 0; t < 2000; t += 100) {
+  for (let t = 0; t < 1000; t += 100) {
     const result = flow.update(raised, t);
     assert.equal(result.mode, 'presence');
-    assert.equal(result.progress, t / 20);
+    assert.equal(result.progress, t / 10);
     assert.equal(result.matched, false);
   }
-  for (let t = 2000; t < 3000; t += 100) {
+  for (let t = 1000; t < 2000; t += 100) {
     const result = flow.update(raised, t);
     assert.equal(result.mode, 'pose');
     assert.equal(result.matched, false);
   }
-  for (let t = 3000; t <= 4500; t += 100) {
+  for (let t = 2000; t <= 3500; t += 100) {
     const result = flow.update(raised, t);
     assert.equal(result.mode, 'circle');
     assert.equal(result.matched, false);
@@ -474,21 +474,21 @@ test('the full sequence recognizes an upper-body-only participant and returns on
   assert.equal(flow.update(upperBody(), time + 65, aspect).mode, 'presence');
 });
 
-test('presence must be continuous only until the first two seconds have completed', () => {
+test('presence must be continuous only until the first second have completed', () => {
   const flow = new MotionFlow();
-  for (let t = 0; t <= 1700; t += 100) flow.update(upperBody(true), t);
-  assert.equal(flow.update(null, 1800).progress, 0);
-  for (let t = 1900; t < 3900; t += 100) assert.equal(flow.update(upperBody(true), t).mode, 'presence');
-  assert.equal(flow.update(upperBody(true), 3900).mode, 'pose');
+  for (let t = 0; t <= 700; t += 100) flow.update(upperBody(true), t);
+  assert.equal(flow.update(null, 800).progress, 0);
+  for (let t = 900; t < 1900; t += 100) assert.equal(flow.update(upperBody(true), t).mode, 'presence');
+  assert.equal(flow.update(upperBody(true), 1900).mode, 'pose');
 });
 
 test('a confirmed pose pauses on tracking loss and counts only observed, valid hold intervals', () => {
   const flow = new MotionFlow();
   let result;
-  for (let t = 0; t <= 2700; t += 100) result = flow.update(upperBody(true), t);
+  for (let t = 0; t <= 1700; t += 100) result = flow.update(upperBody(true), t);
   assert.equal(result.mode, 'pose');
   assert.equal(result.progress, 70);
-  for (const [points, time] of [[null, 2800], [[upperBody(), upperBody()], 8000],
+  for (const [points, time] of [[null, 1800], [[upperBody(), upperBody()], 8000],
     [upperBody(false), 22000], [upperBody(true), 30000]]) {
     result = flow.update(points, time);
     assert.equal(result.mode, 'pose');
