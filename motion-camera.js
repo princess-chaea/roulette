@@ -18,7 +18,7 @@
       this.detector = new MotionGestures.MotionFlow();
       this.participant = new MotionInput.ParticipantTracker();
       this.exposure = new MotionInput.ExposureInput(() => document.createElement('canvas'));
-      this.recovering = false;
+      this.recovering = false; this.preGestureLostAt = null;
       this.gripImage = new Image();
       this.gripImage.src = new URL('../../art/ar-grip.png', BASE).href;
       this.stream = null; this.engine = null; this.phase = 'stopped';
@@ -76,7 +76,7 @@
       });
     }
     setActive(active) {
-      this.active = active; this.detector.reset(); this.participant.reset(); this.recovering = false;
+      this.active = active; this.detector.reset(); this.participant.reset(); this.recovering = false; this.preGestureLostAt = null;
       if (!active) this.clearOverlay();
     }
     setAnimationHost(host = globalThis) {
@@ -106,8 +106,20 @@
           this.exposure.disable();
           poses = [];
         }
-        const previousMode = this.detector.mode;
-        const { points, changed, paused } = this.participant.select(poses, time, aspect, previousMode);
+        let previousMode = this.detector.mode;
+        let selection = this.participant.select(poses, time, aspect, previousMode);
+        if (!selection.points && this.detector.waitingForFirstGesture) {
+          this.preGestureLostAt ??= time;
+          if (time - this.preGestureLostAt >= 220) {
+            // No starter evidence is being carried over. Re-run the central
+            // check if someone stepped away just as the pose prompt opened.
+            this.participant.reset(); this.detector.reset();
+            previousMode = this.detector.mode;
+            selection = this.participant.select(poses, time, aspect, previousMode);
+            this.preGestureLostAt = null;
+          }
+        } else this.preGestureLostAt = null;
+        const { points, changed, paused } = selection;
         if (changed) this.detector.reset();
         const recognition = this.detector.update(points, time, aspect);
         if (previousMode === 'presence' && recognition.mode !== 'presence') this.participant.lock();
@@ -205,7 +217,7 @@
     }
     clearOverlay() { const ctx = this.canvas.getContext('2d'); ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
     release() {
-      this.active = false; this.detector.reset(); this.participant.reset(); this.exposure.reset(); this.recovering = false;
+      this.active = false; this.detector.reset(); this.participant.reset(); this.exposure.reset(); this.recovering = false; this.preGestureLostAt = null;
       if (this.raf !== null) this.animationHost.cancelAnimationFrame(this.raf);
       this.raf = null;
       this.stream?.getTracks().forEach(track => track.stop()); this.stream = null;

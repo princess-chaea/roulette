@@ -32,7 +32,7 @@ function engine(fail = false) {
   };
 }
 
-function rig(getUserMedia, createEngine) {
+function rig(getUserMedia, createEngine, useActualGestures = false) {
   const frames = new Map();
   let nextId = 0, now = 100;
   const video = {
@@ -48,16 +48,17 @@ function rig(getUserMedia, createEngine) {
     navigator: { mediaDevices: { getUserMedia } }, performance: { now: () => now },
     requestAnimationFrame(callback) { frames.set(++nextId, callback); return nextId; },
     cancelAnimationFrame(id) { frames.delete(id); },
-    MotionGestures: { GestureDetector: FakeDetector, MotionFlow: FakeDetector },
+    MotionGestures: useActualGestures ? require('../motion-gestures.js') : { MotionFlow: FakeDetector },
     MotionInput: require('../motion-input.js')
   };
   runInNewContext(source, sandbox, { filename: 'motion-camera.js' });
-  const phases = [];
+  const phases = [], results = [];
   const camera = new sandbox.MotionCamera({
     video, canvas: { getContext: () => ({ clearRect() {}, setLineDash() {}, strokeRect() {} }) },
-    onState: state => phases.push(state.phase), onResult() {}, canRecognize: () => true
+    onState: state => phases.push(state.phase), onResult: result => results.push(result), canRecognize: () => true
   });
   camera.createEngine = createEngine;
+  if (useActualGestures) camera.draw = () => {};
   function nextFrame() {
     assert.equal(frames.size, 1, 'one loop should be waiting for the next video frame');
     const [id, callback] = frames.entries().next().value;
@@ -65,7 +66,7 @@ function rig(getUserMedia, createEngine) {
     now += 120; video.currentTime += 0.12;
     callback();
   }
-  return { camera, nextFrame, video, frames, phases };
+  return { camera, nextFrame, video, frames, phases, results };
 }
 
 test('canceling a permission request releases a late stream without attaching it or loading a model', async () => {
@@ -180,4 +181,58 @@ test('moving the frame clock to a camera window keeps exactly one loop and relea
   assert.equal(popupFrames.size, 0);
   assert.equal(frames.size, 0);
   assert.equal(granted.track.stops, 1);
+});
+
+function participantAt(x, raised = false, span = .20) {
+  const positions = {
+    0: [x, .25], 11: [x + span/2, .38], 12: [x - span/2, .38],
+    13: [x + span*.68, raised ? .27 : .55], 14: [x - span*.68, raised ? .27 : .55],
+    15: [x + span*.73, raised ? .13 : .67], 16: [x - span*.73, raised ? .13 : .67]
+  };
+  return Array.from({ length: 33 }, (_, i) => positions[i] ?
+    { x: positions[i][0], y: positions[i][1], visibility: 1, presence: 1 } : null);
+}
+
+test('stepping out immediately after position confirmation automatically rearms the 1 s central check', async () => {
+  let poses = [participantAt(.44)];
+  const model = { detectForVideo: () => ({ landmarks: poses }), close() {} };
+  const { camera, nextFrame, results } = rig(async () => stream(), async () => model, true);
+  await camera.start();
+  camera.setActive(true);
+  for (let i = 0; i < 10; i++) nextFrame();
+  assert.equal(results.at(-1).mode, 'pose');
+  assert.equal(results.at(-1).progress, 0);
+  poses = [];
+  nextFrame();
+  poses = [participantAt(.61)];
+  nextFrame(); nextFrame();
+  assert.equal(results.at(-1).mode, 'presence');
+  assert.equal(results.at(-1).progress, 0);
+  for (let i = 0; i < 8; i++) nextFrame();
+  assert.equal(results.at(-1).mode, 'presence');
+  nextFrame();
+  assert.equal(results.at(-1).mode, 'pose');
+  camera.dispose();
+});
+
+test('once a starter has progress, standing aside with a bystander never rearms or advances it', async () => {
+  const participant = participantAt(.5, true), bystander = participantAt(.64, true, .15);
+  let poses = [participant, bystander];
+  const model = { detectForVideo: () => ({ landmarks: poses }), close() {} };
+  const { camera, nextFrame, results } = rig(async () => stream(), async () => model, true);
+  await camera.start(); camera.setActive(true);
+  for (let i = 0; i < 14; i++) nextFrame();
+  assert.equal(results.at(-1).mode, 'pose');
+  const progress = results.at(-1).progress;
+  assert.ok(progress > 0);
+  poses = [bystander];
+  for (let i = 0; i < 12; i++) {
+    nextFrame();
+    assert.equal(results.at(-1).mode, 'pose');
+    assert.equal(results.at(-1).progress, progress);
+  }
+  poses = [participant, bystander];
+  nextFrame(); nextFrame(); nextFrame();
+  assert.ok(results.at(-1).progress > progress);
+  camera.dispose();
 });

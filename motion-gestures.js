@@ -7,8 +7,8 @@
   const POSE_HINTS = {
     hands_up: '양손을 머리 위로 들어 주세요.',
     hands_near_shoulders: '두 손을 양쪽 어깨 가까이에 올려 주세요.',
-    one_hand_up: '한 손만 머리 위로 들어 주세요.',
-    arm_heart: '팔꿈치를 양옆으로 펴고 머리 위에서 두 손을 모아 큰 하트를 만들어 주세요.'
+    one_hand_up: '한 손만 이마나 머리 위로 들어 주세요.',
+    arm_heart: '머리 위로 양팔을 둥글게 들어 주세요. 손끝이 닿지 않아도 돼요.'
   };
   const PRESENCE_HINT = '화면 가운데에서 1초 동안 기다려 주세요.';
   const DEFAULTS = { confidence: 0.55, presenceHoldMs: 1000, poseHoldMs: 1000, startHoldMs: 150, maxFrameGapMs: 350 };
@@ -113,7 +113,7 @@
       matched: fraction >= 1 && closure <= 0.50 * diameter && duration >= 200 };
   }
 
-  function heldPose(kind, points, frame) {
+  function heldPose(kind, points, frame, weakWrist = false) {
     if (kind === 'hands_near_shoulders') {
       const center = 1 - frame.x;
       const handsByShoulders = [LEFT, RIGHT].every(arm => {
@@ -129,31 +129,67 @@
     if (kind === 'arm_heart') {
       const center = 1 - frame.x;
       const leftWrist = points[LEFT.wrist], rightWrist = points[RIGHT.wrist];
-      // The wrists can be apart and at different heights when fingertips meet.
-      const handsMeet = Math.abs(leftWrist.x - rightWrist.x) <= frame.span * 0.70 &&
-        Math.abs((leftWrist.x + rightWrist.x) / 2 - center) <= frame.span * 0.45 &&
-        Math.abs(leftWrist.y - rightWrist.y) <= frame.shoulderScale * 0.38;
+      const wristGap = Math.abs(leftWrist.x - rightWrist.x);
+      const wristCenter = Math.abs((leftWrist.x + rightWrist.x) / 2 - center);
+      const crossed = (leftWrist.x - rightWrist.x) *
+        (points[LEFT.shoulder].x - points[RIGHT.shoulder].x) < 0 &&
+        wristGap > frame.span * .16;
+      // A round arch is enough: hands can be separated and uneven, including
+      // at forehead height. An upright raised arm does not bend inward.
       const noseY = points[0].y;
-      const handsHigh = Math.max(leftWrist.y, rightWrist.y) <= noseY + frame.shoulderScale * 0.05 &&
-        (leftWrist.y + rightWrist.y) / 2 <= noseY - frame.shoulderScale * 0.04;
-      const elbowsWide = Math.abs(points[LEFT.elbow].x - points[RIGHT.elbow].x) >= frame.span * 1.02;
-      const bentInward = [LEFT, RIGHT].every(arm => {
+      if (crossed || wristGap > frame.span * 1.12 || wristCenter > frame.span * .52 ||
+          Math.abs(leftWrist.y - rightWrist.y) > frame.shoulderScale * .60 ||
+          Math.max(leftWrist.y, rightWrist.y) > noseY + frame.shoulderScale * .20 ||
+          (leftWrist.y + rightWrist.y) / 2 > noseY + frame.shoulderScale * .08) return null;
+      const elbows = [LEFT, RIGHT].filter(arm => visible(points[arm.elbow], .34));
+      const round = (arm, strict = false) => {
         const shoulder = points[arm.shoulder], elbow = points[arm.elbow], wrist = points[arm.wrist];
         const outward = Math.sign(shoulder.x - center);
-        return (elbow.x - center) * outward >= frame.span * 0.42 &&
-          (elbow.x - wrist.x) * outward >= frame.span * 0.20 &&
-          elbow.y <= shoulder.y + frame.shoulderScale * 0.22;
-      });
-      return handsMeet && handsHigh && elbowsWide && bentInward ? 'both' : null;
+        return (elbow.x - center) * outward >= frame.span * (strict ? .60 : .38) &&
+          (elbow.x - wrist.x) * outward >= frame.span * (strict ? .28 : .13) &&
+          elbow.y <= shoulder.y + frame.shoulderScale * .35 &&
+          elbow.y >= wrist.y - frame.shoulderScale * .20;
+      };
+      if (elbows.length === 2) {
+        return Math.abs(points[LEFT.elbow].x - points[RIGHT.elbow].x) >= frame.span * .95 &&
+          elbows.every(arm => round(arm)) ? 'both' : null;
+      }
+      // One elbow can briefly be hidden if the other arc and both hands still
+      // give a strong shape; two invisible elbows cannot prove an arm heart.
+      return elbows.length === 1 && wristGap <= frame.span * .76 && wristCenter <= frame.span * .30 &&
+        round(elbows[0], true) ? 'both' : null;
+    }
+    if (kind === 'one_hand_up') {
+      const noseY = points[0].y, scale = frame.shoulderScale, center = 1 - frame.x;
+      const lifted = (arm, other) => {
+        const wrist = points[arm.wrist], elbow = points[arm.elbow];
+        if (!visible(wrist, weakWrist ? .30 : .43)) return false;
+        const outward = Math.sign(points[arm.shoulder].x - center);
+        const handAtSide = (wrist.x - center) * outward > frame.span * .12;
+        const elbowSeen = visible(elbow, .35);
+        const high = wrist.y <= noseY - scale * .08 && (wrist.x - center) * outward > frame.span * -.20 &&
+          (!elbowSeen || elbow.y <= frame.shoulderY + scale * .38);
+        const salute = wrist.y <= noseY + scale * .15 && handAtSide && elbowSeen &&
+          (elbow.x - center) * outward >= frame.span * .47 &&
+          (elbow.x - wrist.x) * outward >= frame.span * .13 &&
+          elbow.y <= frame.shoulderY + scale * .34;
+        if (!high && !salute) return false;
+        const offHand = points[other.wrist], offElbow = points[other.elbow];
+        if (visible(offHand, .38)) return offHand.y > noseY + scale * .15;
+        // The lowered arm may be below frame; visible evidence of a raised
+        // opposite elbow/hand still rejects a two-arm gesture.
+        if (offHand && Number.isFinite(offHand.y) && offHand.y <= noseY + scale * .10 &&
+            Math.min(offHand.visibility ?? 1, offHand.presence ?? 1) >= .35) return false;
+        return !visible(offElbow, .38) || offElbow.y > frame.shoulderY + scale * .03;
+      };
+      if (lifted(LEFT, RIGHT)) return 'left';
+      if (lifted(RIGHT, LEFT)) return 'right';
+      return null;
     }
     const aboveHead = arm => points[arm.wrist].y < points[0].y - frame.height * 0.10 &&
       points[arm.elbow].y <= frame.shoulderY + frame.height * 0.05;
-    const leftUp = aboveHead(LEFT), rightUp = aboveHead(RIGHT);
     const wristGap = Math.abs(points[LEFT.wrist].x - points[RIGHT.wrist].x);
-    if (kind === 'hands_up') return leftUp && rightUp && wristGap >= frame.span * 0.55 ? 'both' : null;
-    if (leftUp && points[RIGHT.wrist].y >= points[0].y) return 'left';
-    if (rightUp && points[LEFT.wrist].y >= points[0].y) return 'right';
-    return null;
+    return aboveHead(LEFT) && aboveHead(RIGHT) && wristGap >= frame.span * 0.55 ? 'both' : null;
   }
 
   class GestureDetector {
@@ -166,6 +202,8 @@
     reset() {
       this.poseHeldMs = 0;
       this.lastPoseTime = null;
+      this.lastStrongWrist = null;
+      this.lastPoseWeak = false;
       this.heldSide = null;
       this.circle = null;
       this.previousBody = null;
@@ -179,6 +217,8 @@
       if (!this.tuning.retainProgress) this.reset();
       else {
         this.lastPoseTime = null;
+        this.lastStrongWrist = null;
+        this.lastPoseWeak = false;
         this.lastTime = null;
         this.previousBody = null;
         this.lastVisibleBody = null;
@@ -267,23 +307,36 @@
     }
 
     followPose(points, frame, time) {
-      // Shoulder taps fit a cropped preview: both wrists and the upper-body
-      // frame are sufficient even when the bent elbows are outside the image.
-      const shoulderPose = this.poseKind === 'hands_near_shoulders';
-      const wristConfidence = shoulderPose ? 0.45 :
-        this.poseKind === 'arm_heart' ? this.tuning.confidence * 0.82 : this.tuning.confidence;
-      const seen = (shoulderPose || [13, 14].every(i => visible(points[i], this.tuning.confidence))) &&
-        [15, 16].every(i => visible(points[i], wristConfidence));
-      const side = seen ? heldPose(this.poseKind, points, frame) : null;
+      const kind = this.poseKind;
+      const handSeen = [15, 16].map(i => visible(points[i], kind === 'hands_up' ? this.tuning.confidence : .43));
+      const seen = kind === 'one_hand_up' ? handSeen.some(Boolean) :
+        handSeen.every(Boolean) && (kind === 'hands_up' ?
+          [13, 14].every(i => visible(points[i], this.tuning.confidence)) :
+          kind !== 'arm_heart' || [13, 14].some(i => visible(points[i], .34)));
+      const side = seen ? heldPose(kind, points, frame) : null;
       if (!side) {
-        this.lastPoseTime = null;
+        if (kind === 'one_hand_up' && this.lastPoseTime !== null && this.lastStrongWrist &&
+            !this.lastPoseWeak && heldPose(kind, points, frame, true) === this.heldSide) {
+          const wrist = points[this.heldSide === 'left' ? LEFT.wrist : RIGHT.wrist];
+          const stable = Math.hypot((wrist.x - this.lastStrongWrist.x) / frame.span,
+            (wrist.y - this.lastStrongWrist.y) / frame.shoulderScale) <= .30;
+          if (stable) {
+            // One low-confidence but still visible sample can bridge to the
+            // next strong sample. It adds no time by itself.
+            this.lastPoseTime = time; this.lastPoseWeak = true;
+            return status('좋아요, 지금 자세를 유지해 주세요.', Math.floor(100 * this.poseHeldMs / this.tuning.poseHoldMs));
+          }
+        }
+        this.lastPoseTime = null; this.lastStrongWrist = null; this.lastPoseWeak = false;
         if (!this.tuning.retainProgress) { this.heldSide = null; this.poseHeldMs = 0; }
-        return status(seen ? POSE_HINTS[this.poseKind] : (shoulderPose ? '얼굴과 어깨, 양손이 화면에 보이도록 해 주세요.' : '얼굴과 양팔이 화면 안에 오도록 해 주세요.'),
+        return status(seen ? POSE_HINTS[kind] : kind === 'one_hand_up' ? '들어 올린 손과 얼굴이 화면에 보이게 해 주세요.' :
+          kind === 'hands_near_shoulders' ? '얼굴과 어깨, 양손이 화면에 보이도록 해 주세요.' : '얼굴과 양팔이 화면 안에 오도록 해 주세요.',
           Math.floor(100 * this.poseHeldMs / this.tuning.poseHoldMs));
       }
       if (side !== this.heldSide) { this.heldSide = side; this.poseHeldMs = 0; }
       else if (this.lastPoseTime !== null) this.poseHeldMs += time - this.lastPoseTime;
-      this.lastPoseTime = time;
+      this.lastPoseTime = time; this.lastPoseWeak = false;
+      this.lastStrongWrist = kind === 'one_hand_up' ? points[side === 'left' ? LEFT.wrist : RIGHT.wrist] : null;
       if (this.poseHeldMs >= this.tuning.poseHoldMs) return status('자세를 확인했어요.', 100, { matched: true });
       return status('좋아요, 지금 자세를 유지해 주세요.', Math.floor(100 * this.poseHeldMs / this.tuning.poseHoldMs));
     }
@@ -401,6 +454,7 @@
     }
 
     get poseKind() { return this.detector.poseKind; }
+    get waitingForFirstGesture() { return this.mode === 'pose' && this.detector.poseHeldMs === 0; }
 
     setPoseKind(kind) {
       this.detector.setPoseKind(kind);

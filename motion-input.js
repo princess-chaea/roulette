@@ -16,17 +16,18 @@
     const faceOffset = Math.abs(nose.x - x) / span;
     const shoulderSlope = Math.abs(left.y - right.y) / (span * aspect);
     const proportion = rise / span;
-    return { points, x, y, span, rise, nose, proportion,
+    return { points, x, y, span, rise, nose, proportion, faceOffset, shoulderSlope,
       confidence: Math.min(...[nose, left, right].map(p => Math.min(p.visibility ?? 1, p.presence ?? 1))),
-      eligible: x >= .25 && x <= .75 && faceOffset <= .57 && shoulderSlope <= .58 &&
-        proportion >= .21 && proportion <= 1.35 };
+      eligible: x >= .25 && x <= .75 && faceOffset <= .74 && shoulderSlope <= .74 &&
+        proportion >= .12 && proportion <= 1.60 };
   }
 
   function priority(body) {
     // Perspective size wins among credible centered torsos. The center and
     // signal quality break close calls; raised arms/hands never affect rank.
-    return Math.sqrt(body.span * body.rise) * (1 - 1.25 * Math.abs(body.x - .5)) *
-      (.85 + .15 * body.confidence);
+    return body.span * Math.sqrt(clamp(body.proportion, .24, .72)) *
+      (1 - 1.25 * Math.abs(body.x - .5)) * (1 - .54 * body.faceOffset) *
+      (1 - .20 * body.shoulderSlope) * (.85 + .15 * body.confidence);
   }
 
   function distance(a, b, aspect) {
@@ -37,10 +38,14 @@
     return { offset, face, size, shape, cost: offset + .45 * face + 1.35 * size + .35 * shape };
   }
 
-  function similar(a, b, aspect, strict = false) {
+  function similar(a, b, aspect, mode = 'live') {
     const { offset, face, size, shape, cost } = distance(a, b, aspect);
-    return offset <= (strict ? .29 : .47) && face <= (strict ? .39 : .64) &&
-      size <= (strict ? .23 : .31) && shape <= (strict ? .40 : .62) ? cost : Infinity;
+    // Returning requires two mutually stable observations. Allow modest
+    // perspective/stance changes against the last sighting, but keep the
+    // more conservative gate for ambiguity and known bystanders.
+    const [maxOffset, maxFace, maxSize, maxShape] = mode === 'strict' ? [.29, .39, .23, .40] :
+      mode === 'return' ? [.52, .64, .32, .62] : [.47, .64, .34, .80];
+    return offset <= maxOffset && face <= maxFace && size <= maxSize && shape <= maxShape ? cost : Infinity;
   }
 
   class ParticipantTracker {
@@ -63,7 +68,7 @@
           .sort((a, b) => similar(this.current, a, aspect) - similar(this.current, b, aspect))[0];
         let winner = continuing && priority(eligible[0]) < priority(continuing) * 1.10 ? continuing : eligible[0];
         if (winner && eligible.some(body => body !== winner &&
-            priority(body) >= priority(winner) * .92 && similar(winner, body, aspect, true) < .24)) {
+            priority(body) >= priority(winner) * .92 && similar(winner, body, aspect, 'strict') < .24)) {
           winner = null;
         }
         const changed = !!this.current && winner !== continuing;
@@ -76,21 +81,21 @@
       }
 
       const gap = this.missed || time - this.lastSeen > 350;
-      const candidates = bodies.map(body => ({ body, cost: similar(this.current, body, aspect, gap) }))
+      const candidates = bodies.map(body => ({ body, cost: similar(this.current, body, aspect, gap ? 'return' : 'live') }))
         .filter(({ body, cost }) => Number.isFinite(cost) && body.x >= .25 && body.x <= .75 &&
           // Frame-to-frame motion can vary, but scale cannot drift indefinitely
           // toward a more distant bystander after the participant was confirmed.
           Math.abs(Math.log(body.span / this.anchor.span)) <= .52 &&
-          Math.abs(Math.log(body.proportion / this.anchor.proportion)) <= .72)
+          Math.abs(Math.log(body.proportion / this.anchor.proportion)) <= .85)
         .sort((a, b) => a.cost - b.cost);
       const chosen = candidates[0];
       const recentOthers = this.others;
       const confusable = chosen && (
         (candidates[1] && candidates[1].cost - chosen.cost < .24) ||
-        recentOthers.some(body => similar(body, chosen.body, aspect, true) <= chosen.cost + .10)
+        recentOthers.some(body => similar(body, chosen.body, aspect, 'strict') <= chosen.cost + .10)
       );
       if (chosen && !confusable && (!gap || (this.pending &&
-          Number.isFinite(similar(this.pending, chosen.body, aspect, true))))) {
+          Number.isFinite(similar(this.pending, chosen.body, aspect, 'strict'))))) {
         this.current = chosen.body; this.lastSeen = time; this.missed = false; this.pending = null;
         this.others = bodies.filter(body => body !== chosen.body);
         return { points: chosen.body.points };

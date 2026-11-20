@@ -406,7 +406,7 @@ test('heart needs wide elbows and upper centered hands; a finger heart or tightl
     if (change === 'elbows in') { points[13].x = 0.52; points[14].x = 0.48; }
     if (change === 'hands beside head') { points[15].x += 0.20; points[16].x += 0.20; }
     if (change === 'hands in front of chest') { points[15].y = 0.40; points[16].y = 0.40; }
-    if (change === 'elbows missing') points[14].presence = 0.1;
+    if (change === 'elbows missing') { points[13] = null; points[14] = null; }
     const detector = new GestureDetector({ poseKind: 'arm_heart' });
     for (let t = 0; t <= 1200; t += 100) assert.equal(detector.update(points, t).progress, 0);
   }
@@ -652,5 +652,59 @@ test('variable radius and camera sampling intervals tolerate a missing section o
       }
     }
     assert.equal(wins, 1, 'sample interval ' + interval + ', direction ' + sign);
+  }
+});
+
+test('either one-arm salute works at forehead height even with the lowered arm cropped', () => {
+  for (const [side, elbow, wrist, otherElbow, otherWrist, x] of [
+    ['left', 13, 15, 14, 16, 1], ['right', 14, 16, 13, 15, -1]
+  ]) {
+    const detector = new GestureDetector({ poseKind: 'one_hand_up' });
+    for (let t = 0; t <= 1000; t += 100) {
+      const p = starter('one_hand_up', side);
+      p[elbow] = point(.5 + x * .16, .34);
+      p[wrist] = point(.5 + x * .055, .265);
+      p[otherElbow] = null; p[otherWrist] = null;
+      const result = detector.update(p, t);
+      assert.equal(result.progress, t / 10);
+      assert.equal(result.matched, t === 1000);
+    }
+  }
+});
+
+test('one-hand hold advances through intermittent weak visibility but real loss cannot add hold time', () => {
+  const detector = new GestureDetector({ poseKind: 'one_hand_up', retainProgress: true });
+  for (let t = 0; t <= 1400; t += 100) {
+    const p = starter('one_hand_up');
+    p[14] = null; p[16] = null;
+    if (t % 200) p[15].visibility = .35;
+    const result = detector.update(p, t);
+    assert.equal(result.progress, Math.floor(t / 200) * 10, t);
+    assert.equal(result.matched, false);
+  }
+  for (let t = 1500; t <= 1800; t += 100) {
+    const p = starter('one_hand_up');
+    p[15] = null; p[16] = null;
+    assert.equal(detector.update(p, t).progress, 70);
+  }
+  assert.equal(detector.update(starter('one_hand_up'), 1900).progress, 70);
+  assert.equal(detector.update(starter('one_hand_up'), 2000).progress, 80);
+  assert.equal(detector.update(starter('one_hand_up'), 2100).matched, false);
+  assert.equal(detector.update(starter('one_hand_up'), 2200).matched, true);
+});
+
+test('a wide rounded heart with separated hands near forehead passes; upright and crossed arms do not', () => {
+  for (const shape of ['rounded', 'upright', 'crossed']) {
+    const detector = new GestureDetector({ poseKind: 'arm_heart' });
+    for (let t = 0; t <= 1000; t += 100) {
+      const p = starter('arm_heart');
+      p[13] = point(.68, .34); p[14] = point(.32, .31);
+      p[15] = point(.60, .26); p[16] = point(.40, .23);
+      p[14].visibility = .44;
+      if (shape === 'upright') { p[13].x = .58; p[14].x = .42; }
+      if (shape === 'crossed') [p[15], p[16]] = [p[16], p[15]];
+      const result = detector.update(p, t);
+      assert.equal(result.matched, shape === 'rounded' && t === 1000, shape);
+    }
   }
 });
