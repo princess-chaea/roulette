@@ -1,0 +1,142 @@
+/* Shared by the main result dialog and its second-monitor mirror. */
+dialog[data-fanfare] {
+  isolation: isolate;
+  border: 2px solid var(--medal-edge);
+  color: #20362c;
+  background: radial-gradient(ellipse at 50% 26%, var(--medal-glow) 0%, var(--medal-pale) 47%, #fff 84%);
+  box-shadow: 0 16px 80px var(--medal-shadow), 0 0 0 5px var(--medal-outline), 0 0 65px var(--medal-outline);
+}
+dialog[data-fanfare]::backdrop {
+  background: radial-gradient(ellipse at 50% 43%, var(--medal-backlight), #071421dc 75%);
+}
+dialog[data-fanfare="gold"] {
+  --medal-glow:#fff1a6; --medal-pale:#fff8e0; --medal-ink:#7e3800; --medal-edge:#efa821;
+  --medal-outline:#ffc44470; --medal-backlight:#ae630ad4; --medal-shadow:#130a00aa;
+}
+dialog[data-fanfare="silver"] {
+  --medal-glow:#d4eeff; --medal-pale:#edf5ff; --medal-ink:#204985; --medal-edge:#7eade4;
+  --medal-outline:#8bc2fc49; --medal-backlight:#23639ebd; --medal-shadow:#00152c88;
+}
+dialog[data-fanfare="bronze"] {
+  --medal-glow:#ffd7af; --medal-pale:#fff1e6; --medal-ink:#83351c; --medal-edge:#c97a49;
+  --medal-outline:#eb986747; --medal-backlight:#884d39b3; --medal-shadow:#2a0b0088;
+}
+dialog[data-fanfare] > .result-content { position:relative; z-index:1; }
+dialog[data-fanfare] .fanfare-rank {
+  display:table;
+  margin:8px auto 12px;
+  padding:.38em .84em;
+  border:1px solid var(--medal-edge);
+  border-radius:999px;
+  background:#fffffff2;
+  color:var(--medal-ink);
+  box-shadow:0 4px 16px var(--medal-outline);
+  letter-spacing:.025em;
+}
+dialog[data-fanfare] .fanfare-rank::before, dialog[data-fanfare] .fanfare-rank::after {
+  content:"✦";
+  margin:0 .35em;
+  color:var(--medal-ink);
+}
+dialog[data-fanfare="gold"] .fanfare-rank { border-width:2px; padding:.42em 1.04em; }
+dialog[data-fanfare="silver"] .fanfare-rank::before, dialog[data-fanfare="silver"] .fanfare-rank::after { content:"◆"; font-size:.76em; }
+dialog[data-fanfare="bronze"] .fanfare-rank::before, dialog[data-fanfare="bronze"] .fanfare-rank::after { content:"✧"; }
+dialog[data-fanfare] h2 { color:var(--medal-ink); }
+.result-fanfare {
+  position:absolute; z-index:0; inset:0; border-radius:inherit; overflow:hidden; pointer-events:none;
+  --travel:1;
+}
+.fanfare-halo, .fanfare-wave, .fanfare-piece { position:absolute; display:block; pointer-events:none; }
+.fanfare-halo, .fanfare-wave { left:50%; top:25%; transform:translate(-50%,-50%); }
+.fanfare-halo { width:min(85%,440px); aspect-ratio:1; opacity:.68; }
+[data-fanfare="gold"] .fanfare-halo {
+  background:
+    radial-gradient(circle, #fff3bd 0 19%, transparent 54%),
+    repeating-conic-gradient(from 7deg, #fff8d398 0 8deg, transparent 8deg 28deg);
+  -webkit-mask-image:radial-gradient(circle, #000 8%, transparent 69%);
+  mask-image:radial-gradient(circle, #000 8%, transparent 69%);
+}
+[data-fanfare="silver"] .fanfare-halo {
+  width:min(74%,405px);
+  background:
+    repeating-linear-gradient(126deg, transparent 0 38px, #fff9 39px 42px, #b8d7ff44 43px 54px, transparent 56px 85px),
+    radial-gradient(ellipse, #ffffffbe, #d5e7ff80 41%, transparent 66%);
+  -webkit-mask-image:radial-gradient(ellipse, #000 17%, transparent 69%);
+  mask-image:radial-gradient(ellipse, #000 17%, transparent 69%);
+}
+[data-fanfare="bronze"] .fanfare-halo {
+  width:min(68%,380px);
+  background:radial-gradient(circle, #fff6d9 0 18%, #ffaf8159 48%, transparent 65%);
+}
+.fanfare-wave {
+  width:min(54%,250px); aspect-ratio:1; border-radius:50%; border:2px solid var(--medal-edge); opacity:.45;
+}
+.fanfare-wave.echo { width:min(67%,300px); border-style:dashed; opacity:.25; }
+[data-fanfare="gold"] .fanfare-wave { border-width:3px; }
+[data-fanfare="silver"] .fanfare-wave { width:min(62%,290px); border-radius:28%; transform:translate(-50%,-50%) rotate(45deg); }
+[data-fanfare="silver"] .fanfare-wave.echo { width:min(74%,320px); }
+[data-fanfare="bronze"] .fanfare-wave { border-style:dotted; opacity:.34; }
+[data-fanfare="bronze"] .fanfare-wave.echo { opacity:.18; }
+
+.fanfare-piece {
+  left:var(--x); top:var(--y); width:var(--piece); height:var(--piece); background:var(--hue); opacity:0;
+}
+.fanfare-piece.star {
+  clip-path:polygon(50% 0,62% 37%,100% 50%,62% 63%,50% 100%,38% 63%,0 50%,38% 37%);
+}
+.fanfare-piece.ribbon { width:calc(var(--piece) * .58); height:calc(var(--piece) * 1.3); border-radius:2px; }
+.fanfare-piece.diamond { clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); }
+.fanfare-piece.ember { border-radius:50%; box-shadow:0 0 10px var(--hue); }
+dialog[open][data-fanfare] .fanfare-piece {
+  animation:fanfare-burst var(--time) cubic-bezier(.12,.55,.24,1) var(--wait) forwards;
+}
+dialog[open][data-fanfare="silver"] .fanfare-piece {
+  animation-name:fanfare-silver-sweep; animation-timing-function:cubic-bezier(.18,.63,.31,1);
+}
+dialog[open][data-fanfare="bronze"] .fanfare-piece {
+  animation-name:fanfare-ember-rise; animation-timing-function:cubic-bezier(.26,.47,.59,1);
+}
+dialog[open][data-fanfare="gold"] .fanfare-halo { animation:fanfare-halo-gold 1.45s ease-out both; }
+dialog[open][data-fanfare] .fanfare-wave { animation:fanfare-ripple .88s ease-out both; }
+dialog[open][data-fanfare] .fanfare-wave.echo { animation-delay:.12s; }
+dialog[open][data-fanfare="silver"] .fanfare-wave { animation-name:fanfare-silver-ripple; }
+dialog[open][data-fanfare="bronze"] .fanfare-wave { animation-duration:1.22s; }
+@keyframes fanfare-burst {
+  0% { opacity:.78; transform:scale(.28) rotate(0); }
+  13% { opacity:1; }
+  67% { opacity:.96; }
+  100% { opacity:0; transform:translate(calc(var(--dx) * var(--travel)),calc(var(--dy) * var(--travel))) rotate(var(--turn)) scale(.65); }
+}
+@keyframes fanfare-silver-sweep {
+  0% { opacity:.72; transform:translate(0,12px) scale(.55) rotate(0); }
+  15% { opacity:.94; }
+  66% { opacity:.85; }
+  100% { opacity:0; transform:translate(calc(var(--dx) * var(--travel)),calc(var(--dy) * var(--travel))) rotate(var(--turn)) scale(.32); }
+}
+@keyframes fanfare-ember-rise {
+  0% { opacity:.64; transform:scale(.45) rotate(0); }
+  21% { opacity:.90; }
+  60% { opacity:.75; }
+  100% { opacity:0; transform:translate(calc(var(--dx) * var(--travel)),calc(var(--dy) * var(--travel))) rotate(var(--turn)) scale(.35); }
+}
+@keyframes fanfare-ripple {
+  from { opacity:.74; transform:translate(-50%,-50%) scale(.36); }
+  to { opacity:.38; transform:translate(-50%,-50%) scale(1); }
+}
+@keyframes fanfare-silver-ripple {
+  from { opacity:.67; transform:translate(-50%,-50%) rotate(8deg) scale(.52); }
+  to { opacity:.36; transform:translate(-50%,-50%) rotate(45deg) scale(1); }
+}
+@keyframes fanfare-halo-gold {
+  from { opacity:.43; transform:translate(-50%,-50%) scale(.75) rotate(-28deg); }
+  to { opacity:.68; transform:translate(-50%,-50%) scale(1) rotate(8deg); }
+}
+@media (max-width:480px) {
+  .result-fanfare { --travel:.76; }
+}
+@media (prefers-reduced-motion: reduce) {
+  dialog[open][data-fanfare] :is(.fanfare-piece,.fanfare-wave,.fanfare-halo) {
+    animation:none !important; transition:none !important;
+  }
+  .fanfare-piece { display:none; }
+}

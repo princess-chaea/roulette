@@ -77,6 +77,19 @@
       @media (max-width: 650px) { footer { grid-template-columns: auto 1fr; } nav { grid-column: 1/-1; max-width: none; } }
     `);
 
+    // Share the exact same scene stylesheet. Copy loaded rules to avoid
+    // delaying a win effect while a popup stylesheet request is in flight.
+    const fanfareStyle = source('result-fanfare-style');
+    if (fanfareStyle) {
+      try {
+        const rules = Array.from(fanfareStyle.sheet.cssRules, rule => rule.cssText);
+        element('style', doc.head, rules.join('\n'));
+      } catch {
+        const link = doc.importNode(fanfareStyle, false);
+        link.href = fanfareStyle.href;
+        doc.head.append(link);
+      }
+    }
     const stage = element('main', doc.body);
     const canvas = element('canvas', stage);
     canvas.setAttribute('aria-label', '거울 카메라 영상과 동작 인식 표시');
@@ -121,21 +134,22 @@
     const result = element('dialog', doc.body);
     result.className = 'result';
     result.setAttribute('aria-labelledby', 'camera-result-prize');
-    const resultArt = element('img', result);
-    const resultRank = element('p', result); resultRank.className = 'rank';
-    const resultPrize = element('h2', result); resultPrize.id = 'camera-result-prize';
-    element('button', result, '확인').onclick = () => source('result-dialog').close();
+    const resultContent = element('div', result);
+    resultContent.className = 'result-content';
+    const resultArt = element('img', resultContent);
+    const resultRank = element('p', resultContent); resultRank.className = 'rank fanfare-rank';
+    const resultPrize = element('h2', resultContent); resultPrize.id = 'camera-result-prize';
+    element('button', resultContent, '확인').onclick = () => source('result-dialog').close();
     result.addEventListener('close', () => { if (source('result-dialog').open) source('result-dialog').close(); });
     function syncResult() {
       const original = source('result-dialog');
-      if (original.open) {
+      RouletteFanfare.syncDialog(original, result, () => {
         const art = original.querySelector('.result-art');
         if (resultArt.src !== art.src) resultArt.src = art.src;
         resultArt.alt = art.alt;
         resultRank.textContent = source('result-rank').textContent;
         resultPrize.textContent = source('result-prize').textContent;
-        if (!result.open) result.showModal();
-      } else if (result.open) result.close();
+      });
     }
     const video = source('camera-video');
     const overlay = source('tracking-overlay');
@@ -154,7 +168,7 @@
     }
     current.observer = new MutationObserver(syncInstructions);
     current.observer.observe(source('camera-preview').closest('.camera-card'), { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['hidden', 'src', 'disabled', 'aria-valuenow'] });
-    current.observer.observe(source('result-dialog'), { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['open','src','alt'] });
+    current.observer.observe(source('result-dialog'), { subtree:true, childList:true, characterData:true, attributes:true, attributeFilter:['open','data-result-id'] });
     syncInstructions();
 
     function render() {

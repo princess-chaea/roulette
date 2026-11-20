@@ -43,7 +43,7 @@ h1,h2,h3,.brand>span{font-family:SchoolPoster,KERISBaeum,sans-serif;font-weight:
 
 .display-actions{display:flex;align-items:center;justify-content:flex-end;gap:14px;margin:-10px 0 20px;flex-wrap:wrap}.display-actions span{font-size:12px;color:var(--muted)}
 body.dual-monitor .draw-layout,body.roulette-fullscreen .draw-layout{grid-template-columns:minmax(0,1fr)}
-body.dual-monitor .draw-controls,body.roulette-fullscreen .draw-controls{position:fixed;left:-200vw;width:500px;top:0}
+body.dual-monitor .draw-controls{position:fixed;left:-200vw;width:500px;top:0}
 body.dual-monitor .large-wheel,body.roulette-fullscreen .large-wheel{max-width:min(65vh,720px)}
 body.roulette-fullscreen .draw-heading,body.roulette-fullscreen .site-footer,body.roulette-fullscreen #draw-page>.page-bottom{display:none}
 body.roulette-fullscreen .display-actions{margin:12px 0}body.roulette-fullscreen .draw-wheel-card{padding-top:14px}
@@ -68,3 +68,29 @@ button.organization{border:0;cursor:pointer;appearance:none;font:inherit;transit
 .camera-card .camera-actions{display:grid;grid-template-columns:minmax(0,1fr) 49px;gap:8px}.camera-refresh{padding:12px;min-width:0}.camera-refresh svg{width:21px;height:21px}
 
 .wheel-text-display .wheel-layout-options{grid-template-columns:repeat(3,minmax(0,1fr))}.wheel-text-display{margin-top:-6px}
+
+/* Single-screen draw: camera first, wheel only after an accepted spin. */
+#draw-page .draw-layout { grid-template-columns:minmax(0,1fr); }
+#draw-page[data-draw-stage="camera"] .draw-controls {
+  width:100%; max-width:1020px; margin-inline:auto;
+}
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .draw-wheel-card { display:none; }
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .camera-live-view { max-height:63vh; max-height:63svh; }
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .live-guide { width:clamp(70px,13vw,132px); }
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .live-guide img { width:100%; height:auto; aspect-ratio:1; }
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .gesture-instruction h3 { font-size:clamp(17px,2.4vw,25px); }
+body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .gesture-instruction p { font-size:clamp(12px,1.7vw,16px); }
+body.dual-monitor #draw-page .draw-controls,
+#draw-page[data-draw-stage="wheel"] .draw-controls {
+  position:fixed; left:-200vw; top:0; width:500px; max-width:none; margin:0; visibility:hidden;
+}
+body.dual-monitor #draw-page .large-wheel,
+#draw-page[data-draw-stage="wheel"] .large-wheel {
+  max-width:min(100%,72vh,750px);
+  max-width:min(100%,72svh,750px);
+}
+#draw-stage-start { scroll-margin-top:10px; }
+#draw-stage-start .manual-button { width:auto; margin-inline-end:auto; padding-inline:12px; }
+#draw-stage-start .manual-button svg { width:16px; height:16px; }
+#draw-error { margin-bottom:12px; }
+#draw-error:empty { display:none; }

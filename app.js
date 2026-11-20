@@ -233,19 +233,28 @@
     if (error) return false;
     return true;
   }
+  function showDrawStage(stage) { $('draw-page').dataset.drawStage = stage; }
   function spin(direction = 'clockwise') {
     if (!canStart()) return;
+    const wheel = $('draw-wheel');
     if (gripRotationBase !== null) {
-      const matrix = new DOMMatrix(getComputedStyle($('draw-wheel')).transform);
-      const visualAngle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
-      const difference = (visualAngle - rotation) * Math.PI / 180;
-      rotation += Math.atan2(Math.sin(difference), Math.cos(difference)) * 180 / Math.PI;
-      $('draw-wheel').style.transition = 'none';
-      $('draw-wheel').style.transform = `rotate(${rotation}deg)`;
+      if (CameraWindow.isOpen()) {
+        // A visible wheel may still be interpolating the last hand sample.
+        const matrix = new DOMMatrix(getComputedStyle(wheel).transform);
+        const visualAngle = Math.atan2(matrix.b, matrix.a) * 180 / Math.PI;
+        const difference = (visualAngle - rotation) * Math.PI / 180;
+        rotation += Math.atan2(Math.sin(difference), Math.cos(difference)) * 180 / Math.PI;
+      }
+      wheel.style.transition = 'none';
+      wheel.style.transform = `rotate(${rotation}deg)`;
     }
-    gripRotationBase = null; // Continue smoothly from the participant's hand angle.
-    if (matchMedia('(max-width: 800px)').matches) $('draw-wheel').closest('.wheel-stage').scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'center' });
-    disarmMotion(); busy = true; updateControls(); beginRotation(direction);
+    gripRotationBase = null;
+    disarmMotion(); busy = true; updateControls();
+    // Reveal before scrolling, measuring the lens, or beginning the animation.
+    // Visibility changes do not close or replace the camera session.
+    showDrawStage('wheel');
+    if (!CameraWindow.isOpen()) wheel.closest('.wheel-stage').scrollIntoView({ behavior: 'instant', block: 'center' });
+    beginRotation(direction);
   }
   async function beginRotation(direction) {
     const random = crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296;
@@ -254,7 +263,7 @@
     const sliceRandom = candidates.length > 1 ? crypto.getRandomValues(new Uint32Array(1))[0] / 4294967296 : 0;
     const selected = candidates[Math.floor(sliceRandom * candidates.length)];
     renderOperatorMode();
-    if (!selected) { busy = false; updateControls(); return; }
+    if (!selected) { busy = false; showDrawStage('camera'); resetAutoMotion(); updateControls(); return; }
     const plan = math.finishPlan(state.prizes, selected, rotation, direction, state.wheelLayout);
     const { target, landingAngle } = plan;
     state.pending = { id: crypto.randomUUID(), prizeId: selected.id, rank: selected.rank, prize: selected.name, name: `${state.history.length + 1}회차`, time: new Date().toISOString(), landingAngle, direction };
@@ -337,19 +346,27 @@
   }
   function showResult() {
     if (!lastResult) return;
+    showDrawStage('wheel');
+    const dialog = $('result-dialog');
     $('result-rank').textContent = lastResult.rank + '등 당첨!';
     $('result-prize').textContent = lastResult.prize;
-    $('result-dialog').querySelector('.result-art').src = assetPath(presentation.rankImage(lastResult.rank));
-    $('result-dialog').querySelector('.result-art').alt = `${lastResult.rank}등 당첨을 축하하는 새싹 캐릭터`;
-    if (!$('result-dialog').open) $('result-dialog').showModal();
+    const art = dialog.querySelector('.result-art');
+    art.src = assetPath(presentation.rankImage(lastResult.rank));
+    art.alt = `${lastResult.rank}등 당첨을 축하하는 새싹 캐릭터`;
+    RouletteFanfare.apply(dialog, lastResult.rank, lastResult.id);
+    if (!dialog.open) dialog.showModal();
   }
   function nextParticipant() {
     disarmMotion(); $('finish-lens').hidden = true;
     completedRound = false;
+    showDrawStage('camera');
     renderEditor(); changed(); resetAutoMotion(); setProgress(0);
     $('wheel-message').textContent = math.total(state.prizes) ? '두근두근, 당신의 행운을 기다리는 중' : '모든 선물의 주인공을 찾았어요. 감사합니다!';
     $('draw-error').textContent = math.total(state.prizes) ? '' : '준비한 상품이 모두 소진됐어요. 설계 화면에서 추가할 수 있어요.';
-    if (math.total(state.prizes)) $('manual-spin').focus();
+    if (!$('draw-page').hidden && !CameraWindow.isOpen()) {
+      $('draw-stage-start').scrollIntoView({ behavior: 'instant', block: 'start' });
+      if (math.total(state.prizes)) $('manual-spin').focus({ preventScroll: true });
+    }
   }
   function route() {
     const draw = location.hash === '#draw';
@@ -444,7 +461,7 @@
   document.addEventListener('fullscreenchange', () => {
     const full = !!document.fullscreenElement;
     document.body.classList.toggle('roulette-fullscreen', full);
-    const label = full ? '전체화면 종료' : '룰렛 전체화면';
+    const label = full ? '전체화면 종료' : '전체화면';
     $('roulette-fullscreen').setAttribute('aria-label', label); $('roulette-fullscreen').title = label;
   });
   $('restart-camera').addEventListener('click', () => {

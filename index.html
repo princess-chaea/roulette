@@ -6,15 +6,17 @@
   <meta name="theme-color" content="#173d35">
   <title>모션 룰렛</title>
   <link rel="icon" type="image/png" href="assets/art/roulette-logo.png">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20261120d">
+  <link id="result-fanfare-style" rel="stylesheet" href="result-fanfare.css?v=20261120c">
   <script src="roulette.js" defer></script>
   <script src="presentation.js?v=20261120b" defer></script>
   <script src="motion-gestures.js?v=20261120b" defer></script>
   <script src="motion-input.js?v=20261120b" defer></script>
   <script src="motion-camera.js?v=20261120b" defer></script>
-  <script src="camera-window.js" defer></script>
+  <script src="result-fanfare.js?v=20261120c" defer></script>
+  <script src="camera-window.js?v=20261120c" defer></script>
   <script src="operator-mode.js" defer></script>
-  <script src="app.js?v=20261120b" defer></script>
+  <script src="app.js?v=20261120d" defer></script>
 </head>
 <body>
   <svg class="icon-defs" aria-hidden="true"><defs>
@@ -80,9 +82,15 @@
       <div class="page-bottom"><span id="save-status"><svg><use href="#i-check"/></svg>이 기기에 자동 저장돼요</span><button id="reset-sample" class="text-button">예시로 다시 채우기</button></div>
     </section>
 
-    <section id="draw-page" class="page" hidden>
+    <section id="draw-page" class="page" data-draw-stage="camera" hidden>
       <div class="page-heading draw-heading"><div><p class="eyebrow" id="draw-event">OUR LUCKY MOMENT</p><h1>움직이면, 행운이 시작돼요<span class="heading-dot">.</span></h1><p class="subtitle">카메라 앞에서 준비해 주세요. 오늘의 주인공은 바로 당신!</p></div><button class="button secondary" id="show-history"><svg><use href="#i-history"/></svg>당첨 기록 <span id="history-count">0</span></button></div>
-      <div class="display-actions"><button class="button secondary" id="open-camera-window" type="button" aria-label="카메라 새 창" title="카메라 새 창"><svg aria-hidden="true"><use href="#i-pip"/></svg></button><button class="button secondary" id="roulette-fullscreen" type="button" aria-label="룰렛 전체화면" title="룰렛 전체화면"><svg aria-hidden="true"><use href="#i-fullscreen"/></svg></button><span id="display-message" role="status"></span></div>
+      <div class="display-actions" id="draw-stage-start">
+        <button class="button manual-button" id="manual-spin" type="button"><svg aria-hidden="true"><use href="#i-play"/></svg>버튼으로 돌리기</button>
+        <button class="button secondary" id="open-camera-window" type="button" aria-label="카메라 새 창" title="카메라 새 창"><svg aria-hidden="true"><use href="#i-pip"/></svg></button>
+        <button class="button secondary" id="roulette-fullscreen" type="button" aria-label="전체화면" title="전체화면"><svg aria-hidden="true"><use href="#i-fullscreen"/></svg></button>
+        <span id="display-message" role="status"></span>
+      </div>
+      <p id="draw-error" class="form-message" role="status"></p>
       <div class="draw-layout">
         <section class="card draw-wheel-card" aria-labelledby="draw-wheel-heading">
           <div class="card-heading"><h2 id="draw-wheel-heading"><span class="status-light"></span>행운의 룰렛</h2><span class="pill" id="remaining-pill">20개 남음</span></div>
@@ -108,15 +116,13 @@
             <p id="camera-error" class="form-message" role="status"></p>
             <p class="privacy-note">영상은 이 기기에서 분석하며 녹화·업로드하지 않아요.<br>밝은 곳에서 한 명씩, 얼굴·어깨와 안내된 손을 보여 주세요.</p>
           </section>
-          <button class="button manual-button" id="manual-spin"><svg><use href="#i-play"/></svg>버튼으로 돌리기</button>
-          <p id="draw-error" class="form-message" role="status"></p>
         </div>
       </div>
       <div class="page-bottom"><span>몸짓 하나로 만드는 특별한 순간 <span aria-hidden="true">✦</span></span></div>
     </section>
     <footer class="site-footer"><span>© 초등정보교과교육연구회</span><p>작은 움직임, 커다란 설렘.</p><span>제작자 하주초 교사 이성근</span></footer>
   </main>
-  <dialog id="result-dialog" class="result-dialog" aria-labelledby="result-prize"><form method="dialog"><button class="dialog-close" aria-label="당첨 결과 닫기">×</button><img class="result-art" src="assets/art/pose-guide.png" alt="두 손을 들고 당첨을 축하하는 새싹 캐릭터"><p id="result-rank" class="result-rank"></p><h2 id="result-prize"></h2><p class="result-saved"><svg><use href="#i-check"/></svg>당첨 기록과 남은 개수에 반영했어요</p><button class="button primary full" id="next-participant" value="next">확인</button></form></dialog>
+  <dialog id="result-dialog" class="result-dialog" aria-labelledby="result-prize"><form class="result-content" method="dialog"><button class="dialog-close" aria-label="당첨 결과 닫기">×</button><img class="result-art" src="assets/art/pose-guide.png" alt="두 손을 들고 당첨을 축하하는 새싹 캐릭터"><p id="result-rank" class="result-rank fanfare-rank"></p><h2 id="result-prize"></h2><p class="result-saved"><svg><use href="#i-check"/></svg>당첨 기록과 남은 개수에 반영했어요</p><button class="button primary full" id="next-participant" value="next">확인</button></form></dialog>
   <dialog id="history-dialog" class="history-dialog" aria-labelledby="history-heading"><div class="card-heading"><h2 id="history-heading">오늘의 당첨 기록</h2><button class="dialog-close" id="close-history" aria-label="당첨 기록 닫기">×</button></div><div id="history-list"></div><p class="small muted">당첨 기록은 현재 기기에만 저장돼요.</p></dialog>
 </body>
 </html>
