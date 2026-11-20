@@ -56,25 +56,39 @@
     element('style', doc.head, `
       * { box-sizing: border-box; }
       [hidden] { display: none !important; }
-      body { margin: 0; height: 100vh; height: 100dvh; display: grid; grid-template-rows: minmax(0,1fr) auto; background: #122b24; color: #193b32; font-family: KERISBaeum,sans-serif; }
-      main { position: relative; min-height: 0; overflow: hidden; display: grid; place-items: center; }
-      canvas { position: absolute; inset: 0; height: 100%; width: 100%; object-fit: contain; }
-      .waiting { padding: 1rem; color: #edf5d7; font-size: clamp(18px,3vw,32px); text-align: center; }
-      footer { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: clamp(10px,2vw,28px); padding: clamp(12px,2.5vw,30px); background: #fafbf3; }
-      footer img { width: clamp(52px,8vw,110px); height: clamp(52px,8vw,110px); object-fit: contain; }
-      h1 { margin: 0; font: 700 clamp(20px,3vw,44px)/1.2 SchoolPoster,KERISBaeum,sans-serif; }
-      p { margin: .35em 0 0; font-size: clamp(14px,1.75vw,25px); }
-      .feedback { color: #557047; }
-      progress { width: 100%; height: 8px; accent-color: #6d914c; }
-      nav { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 17rem; }
-      button { border: 1px solid #c9d8c2; border-radius: 8px; background: #fff; color: #193b32; font: 700 15px KERISBaeum,sans-serif; padding: .6em .85em; cursor: pointer; }
+      body { margin: 0; height: 100vh; height: 100dvh; min-height: 300px; display: grid; grid-template-rows: auto minmax(0,1fr) auto; background: #122b24; color: #193b32; font-family: KERISBaeum,sans-serif; }
+      header { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:46px; padding:5px clamp(10px,2vw,24px); background:#fafbf3; }
+      header .brand { display:flex; align-items:center; gap:6px; font:700 clamp(16px,2.5vw,25px) SchoolPoster,KERISBaeum,sans-serif; white-space:nowrap; }
+      header .brand img { width:36px; height:36px; object-fit:contain; }
+      header .research-logo { width:clamp(108px,28vw,217px); max-width:47%; max-height:40px; object-fit:contain; object-position:right; }
+      main { --rail:clamp(120px,16vw,176px); display:grid; grid-template-columns:var(--rail) minmax(0,1fr) var(--rail); grid-template-rows:minmax(0,1fr); min-height:0; gap:8px; padding:8px; }
+      .feed { position:relative; grid-area:1/2; display:grid; place-items:center; min-height:0; overflow:hidden; }
+      canvas { position:absolute; inset:0; height:100%; width:100%; object-fit:contain; }
+      .waiting { padding:1rem; color:#edf5d7; font-size:clamp(18px,3vw,31px); text-align:center; }
+      .guide-panel { grid-area:1/3; align-self:end; min-width:0; padding:9px; border:1px solid #ffffffad; border-radius:12px; background:#f7faefdf; pointer-events:none; }
+      .guide-panel img { display:block; width:min(100%,100px); margin:0 auto 5px; aspect-ratio:1; object-fit:contain; }
+      h1 { margin:0; font:700 clamp(14px,1.6vw,18px)/1.35 SchoolPoster,KERISBaeum,sans-serif; }
+      p { margin:.35em 0 0; font-size:clamp(12px,1.35vw,17px); line-height:1.4; }
+      footer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(8px,1.5vw,22px); padding:8px clamp(10px,2vw,24px); background:#fafbf3; }
+      .feedback { margin:0 0 3px; color:#557047; }
+      progress { width:100%; height:8px; accent-color:#6d914c; }
+      nav { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; max-width:19rem; }
+      button { border:1px solid #c9d8c2; border-radius:8px; background:#fff; color:#193b32; font:700 13px KERISBaeum,sans-serif; padding:.6em .7em; cursor:pointer; }
       .result { border:0; border-radius:28px; padding:clamp(24px,5vw,52px); width:min(90vw,620px); text-align:center; color:#193b32; background:#fff; box-shadow:0 20px 80px #0005; max-height:92dvh; overflow:auto; }
       .result::backdrop { background:#122b2488; backdrop-filter:blur(8px); }
       .result img { display:block; width:clamp(140px,24vh,240px); height:clamp(140px,24vh,240px); object-fit:contain; margin:0 auto 12px; }
       .result h2 { font:700 clamp(28px,4vw,48px)/1.3 SchoolPoster,KERISBaeum,sans-serif; margin:12px 0 28px; overflow-wrap:anywhere; }
       .result .rank { color:#6b8758; font-weight:700; font-size:clamp(18px,2.5vw,26px); }
       .result button { width:100%; background:#173d35; color:white; border:0; padding:18px; font-size:20px; }
-      @media (max-width: 650px) { footer { grid-template-columns: auto 1fr; } nav { grid-column: 1/-1; max-width: none; } }
+      @media (max-width:650px) {
+        main { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) auto; }
+        .feed { grid-area:1/1; }
+        .guide-panel { grid-area:2/1; justify-self:end; display:flex; align-items:center; gap:6px; width:min(100%,400px); padding:5px; }
+        .guide-panel img { width:48px; margin:0; flex-shrink:0; }
+        footer { gap:5px; }
+        nav { max-width:11rem; }
+      }
+      @media (max-height:470px) { .guide-panel img { max-width:58px; } }
     `);
 
     // Share the exact same scene stylesheet. Copy loaded rules to avoid
@@ -90,21 +104,39 @@
         doc.head.append(link);
       }
     }
+    const top = element('header', doc.body);
+    const brand = element('div', top);
+    brand.className = 'brand';
+    const brandArt = element('img', brand);
+    brandArt.src = document.querySelector('.brand-wheel').src;
+    brandArt.alt = '';
+    element('span', brand, '모션 룰렛');
+    const researchArt = element('img', top);
+    researchArt.className = 'research-logo';
+    researchArt.src = source('organization-mode').querySelector('img').src;
+    researchArt.alt = '초등정보교과교육연구회';
+
     const stage = element('main', doc.body);
-    const canvas = element('canvas', stage);
+    const feed = element('div', stage);
+    feed.className = 'feed';
+    const canvas = element('canvas', feed);
     canvas.setAttribute('aria-label', '거울 카메라 영상과 동작 인식 표시');
     const context = canvas.getContext('2d');
-    const waiting = element('div', stage);
+    const waiting = element('div', feed);
     waiting.className = 'waiting';
-    const footer = element('footer', doc.body);
-    const guide = element('img', footer);
+    const guidePanel = element('aside', stage);
+    guidePanel.className = 'guide-panel';
+    guidePanel.setAttribute('aria-label', '현재 동작 안내');
+    const guide = element('img', guidePanel);
     guide.alt = '';
-    const instructions = element('section', footer);
+    const instructions = element('div', guidePanel);
     const title = element('h1', instructions);
     const description = element('p', instructions);
-    const feedback = element('p', instructions);
+    const footer = element('footer', doc.body);
+    const meter = element('div', footer);
+    const feedback = element('p', meter);
     feedback.className = 'feedback';
-    const progress = element('progress', instructions);
+    const progress = element('progress', meter);
     progress.max = 100;
     progress.setAttribute('aria-label', '동작 인식 진행률');
     const controls = element('nav', footer);
@@ -159,8 +191,10 @@
       description.textContent = source('gesture-description').textContent;
       feedback.textContent = source('camera-error').textContent || source('camera-feedback').textContent;
       progress.value = Number(source('motion-progress').getAttribute('aria-valuenow'));
-      const guideUrl = source('live-guide-image').src;
-      if (guide.src !== guideUrl) guide.src = guideUrl;
+      const originalGuide = source('live-guide-image');
+      if (guide.src !== originalGuide.src) guide.src = originalGuide.src;
+      guide.hidden = originalGuide.hidden;
+      guidePanel.hidden = source('live-guide').hidden;
       connect.textContent = source('camera-button-label').textContent;
       connect.disabled = source('connect-camera').disabled;
       restart.disabled = source('restart-camera').disabled;

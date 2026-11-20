@@ -75,11 +75,6 @@ button.organization{border:0;cursor:pointer;appearance:none;font:inherit;transit
   width:100%; max-width:1020px; margin-inline:auto;
 }
 body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .draw-wheel-card { display:none; }
-body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .camera-live-view { max-height:63vh; max-height:63svh; }
-body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .live-guide { width:clamp(70px,13vw,132px); }
-body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .live-guide img { width:100%; height:auto; aspect-ratio:1; }
-body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .gesture-instruction h3 { font-size:clamp(17px,2.4vw,25px); }
-body:not(.dual-monitor) #draw-page[data-draw-stage="camera"] .gesture-instruction p { font-size:clamp(12px,1.7vw,16px); }
 body.dual-monitor #draw-page .draw-controls,
 #draw-page[data-draw-stage="wheel"] .draw-controls {
   position:fixed; left:-200vw; top:0; width:500px; max-width:none; margin:0; visibility:hidden;
@@ -94,3 +89,92 @@ body.dual-monitor #draw-page .large-wheel,
 #draw-stage-start .manual-button svg { width:16px; height:16px; }
 #draw-error { margin-bottom:12px; }
 #draw-error:empty { display:none; }
+
+/* Symmetric side rails center the camera. Guide content lives in a separate
+   corner cell of the same frame, never above the video or landmark canvas. */
+.camera-scene {
+  --guide-rail:clamp(128px,16vw,178px);
+  display:grid; grid-template-columns:var(--guide-rail) minmax(0,1fr) var(--guide-rail);
+  gap:8px; padding:8px; border-radius:17px; background:#edf3e4;
+}
+.camera-scene.is-live { background:#17271e; }
+.camera-scene .camera-live-view {
+  grid-area:1/2; width:100%; min-width:0; min-height:0;
+  margin-inline:auto; max-height:63vh; max-height:63svh; align-self:center;
+}
+.camera-scene .live-guide {
+  grid-area:1/3; position:static; align-self:end; justify-self:end; width:100%;
+  min-width:0; margin:0; padding:9px; gap:7px; align-items:center;
+  background:#f7faefdf; color:#193b32; pointer-events:none;
+}
+.camera-scene .live-guide img { display:block; width:min(100%,104px); height:auto; aspect-ratio:1; flex-shrink:0; }
+.camera-scene .live-guide h3 { margin:0; font-size:clamp(13px,1.4vw,16px); line-height:1.45; }
+.camera-scene .live-guide p { margin:4px 0 0; font-size:clamp(11px,1.2vw,13px); line-height:1.45; color:#405d4a; }
+.camera-bottom {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(155px,.45fr); gap:6px 14px;
+  align-items:center; margin-top:10px;
+}
+.camera-bottom .camera-meter, .camera-bottom #camera-error { margin:0; }
+.camera-bottom #camera-error { grid-column:1/-1; }
+.camera-bottom #camera-error:empty { display:none; }
+
+body.roulette-fullscreen .site-header {
+  display:flex; justify-content:space-between; flex-wrap:nowrap; width:100%; height:clamp(46px,8vh,60px);
+  min-height:0; padding:4px clamp(10px,3vw,32px); gap:8px; margin:0 auto;
+}
+body.roulette-fullscreen .site-header .brand-wheel { width:36px; height:36px; }
+body.roulette-fullscreen .site-header .brand>span { font-size:clamp(16px,2.6vw,25px); }
+body.roulette-fullscreen .site-header .organization {
+  width:clamp(115px,26vw,236px); max-width:48%; padding:0; margin:0; flex-shrink:0;
+}
+body.roulette-fullscreen .site-header .organization img { max-height:44px; object-fit:contain; object-position:right; }
+body.roulette-fullscreen .site-header .page-tabs { display:none; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) {
+  height:100vh; height:100dvh; min-height:320px;
+  display:grid; grid-template-rows:auto minmax(0,1fr);
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) > main {
+  display:flex; flex-direction:column; width:100%; min-height:0; padding-inline:clamp(8px,2vw,24px);
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-page:not([hidden]) {
+  display:flex; flex:1; min-height:0; flex-direction:column; padding-bottom:8px;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .draw-heading,
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .privacy-note { display:none; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .display-actions { margin:4px 0 6px; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .draw-layout {
+  flex:1; min-height:0; align-items:stretch;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) #draw-page .draw-controls { max-width:1310px; min-height:0; display:flex; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-card {
+  display:flex; flex-direction:column; flex:1; min-height:0; gap:5px; padding:8px;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-card .card-heading,
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { margin:0; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { padding:2px; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps>[data-step] { padding:3px; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-scene {
+  flex:1; min-height:94px; grid-template-rows:minmax(0,1fr);
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-scene .camera-live-view {
+  height:100%; max-height:none; aspect-ratio:auto;
+}
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom { margin-top:0; }
+body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-bottom .button { min-height:40px; padding-block:7px; }
+@media (max-width:720px) {
+  .camera-scene { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,auto) auto; gap:5px; padding:5px; }
+  .camera-scene .camera-live-view { grid-area:1/1; }
+  .camera-scene .live-guide { grid-area:2/1; flex-direction:row; width:min(100%,420px); }
+  .camera-scene .live-guide img { width:clamp(36px,11vw,58px); }
+  .camera-bottom { grid-template-columns:minmax(0,1fr) minmax(130px,.68fr); gap:6px; }
+  .camera-bottom .camera-actions { gap:4px; grid-template-columns:minmax(0,1fr) 36px; }
+  .camera-bottom .camera-actions .button { padding-inline:5px; font-size:12px; }
+  body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .camera-scene {
+    grid-template-rows:minmax(0,1fr) auto;
+  }
+}
+@media (max-height:500px) {
+  body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .motion-steps { display:none; }
+  body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .live-guide img { max-width:56px; }
+  body.roulette-fullscreen.camera-presentation:not(.dual-monitor) .live-guide { padding:5px; gap:4px; }
+}

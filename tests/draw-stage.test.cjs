@@ -16,7 +16,7 @@ function runApp() {
     const toggle = (key, force = !classes.has(key)) => force ? classes.add(key) : classes.delete(key);
     const element = {
       dataset: {}, style: { setProperty() {} }, hidden: false, offsetTop: 15,
-      open: false, disabled: false, classList: { add: key => classes.add(key), remove: key => classes.delete(key), toggle },
+      open: false, disabled: false, classList: { add: key => classes.add(key), remove: key => classes.delete(key), contains: key => classes.has(key), toggle },
       append(...items) { children.push(...items); },
       replaceChildren(...items) { children.splice(0, children.length, ...items); },
       get firstElementChild() { return children[0]; },
@@ -66,7 +66,7 @@ function runApp() {
   });
   const animationHost = { requestAnimationFrame: () => 1, cancelAnimationFrame() {} };
   const sandbox = {
-    document: doc, window: node('window'), location: { hash: '#draw' },
+    document: doc, window: Object.assign(node('window'), { scrollTo() {} }), location: { hash: '#draw' },
     RouletteMath: require('../roulette.js'), RoulettePresentation: require('../presentation.js'),
     FirstPrizeMode: require('../operator-mode.js'), MotionGestures: require('../motion-gestures.js'),
     RouletteFanfare: { apply() {} },
@@ -95,7 +95,10 @@ function runApp() {
     await flush();
     assert.equal(get('result-dialog').open, true);
   }
-  return { get, camera, finish, spins, scrolls, state: () => snapshot, split(open) {
+  return { get, camera, finish, spins, scrolls, state: () => snapshot, body: doc.body, fullscreen(on) {
+    doc.fullscreenElement = on ? {} : null;
+    doc.emit('fullscreenchange');
+  }, split(open) {
     options.popup = open;
     sandbox.window.emit('camera-window-change', { detail: { open } });
   } };
@@ -111,6 +114,7 @@ test('motion switches from camera to wheel only on a completed crank, then rearm
   assert.equal(h.state().pending, null);
   h.camera.onResult({ mode:'circle', progress: 100, angleDeg: -321, grip: { held:true }, direction: 'counterclockwise', matched: true });
   assert.equal(h.get('draw-page').dataset.drawStage, 'wheel');
+  assert.equal(h.body.classList.contains('camera-presentation'), false);
   assert.deepEqual(h.scrolls[0], ['.wheel-stage', 'wheel']);
   assert.equal(h.state().pending.direction, 'counterclockwise');
   assert.equal(h.camera.active, false);
@@ -120,6 +124,7 @@ test('motion switches from camera to wheel only on a completed crank, then rearm
   assert.equal(h.state().history.length, 1);
   h.get('result-dialog').close();
   assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
+  assert.equal(h.body.classList.contains('camera-presentation'), true);
   assert.equal(h.camera.active, true);
   assert.equal(h.camera.stops, 0);
 });
@@ -138,4 +143,35 @@ test('the manual fallback starts without a camera and a split view does not scro
     assert.equal(h.scrolls.length, split ? 0 : 2);
     assert.equal(h.camera.stops, 0);
   }
+});
+
+test('fullscreen preserves the camera when toggled and swaps position text for live gesture art', () => {
+  const h = runApp();
+  assert.equal(h.body.classList.contains('camera-presentation'), true);
+  assert.equal(h.get('live-guide').hidden, true);
+  h.fullscreen(true);
+  assert.equal(h.body.classList.contains('roulette-fullscreen'), true);
+  assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
+  h.camera.running = true;
+  h.camera.onState({ phase: 'ready', message: 'ready' });
+  assert.equal(h.get('camera-scene').classList.contains('is-live'), true);
+  assert.equal(h.get('live-guide').hidden, false);
+  assert.equal(h.get('live-guide-image').hidden, true);
+  h.camera.onResult({ mode: 'pose', progress: 33, matched: false });
+  assert.equal(h.get('live-guide-image').hidden, false);
+  h.fullscreen(false);
+  assert.equal(h.body.classList.contains('roulette-fullscreen'), false);
+  assert.equal(h.get('draw-page').dataset.drawStage, 'camera');
+  assert.equal(h.camera.active, true);
+  assert.equal(h.camera.stops, 0);
+});
+
+test('guide sits outside the shared video and landmark canvas rectangle, within the camera scene', () => {
+  const preview = html.indexOf('id="camera-preview"');
+  const feedEnd = html.indexOf('\n              </div>\n              <aside', preview);
+  const sceneEnd = html.indexOf('class="camera-bottom"', preview);
+  for (const id of ['camera-video', 'tracking-overlay']) {
+    assert.ok(html.indexOf('id="' + id + '"', preview) < feedEnd && feedEnd > preview);
+  }
+  assert.ok(html.indexOf('id="live-guide"', feedEnd) < sceneEnd);
 });

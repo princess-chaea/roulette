@@ -209,7 +209,8 @@
     $('pose-guide').alt = starter.short + ' 동작 안내';
     $('pose-guide').dataset.poseKind = starter.kind;
     $('live-guide-image').src = mode === 'circle' ? assetPath('assets/art/circle-guide.png') : guideImage;
-    $('live-guide').hidden = !camera?.running || mode === 'presence';
+    $('live-guide').hidden = !camera?.running;
+    $('live-guide-image').hidden = mode === 'presence';
     $('gesture-title').textContent = mode === 'presence' ? MotionGestures.PRESENCE_HINT : mode === 'pose' ? starter.title : '손잡이를 잡고 한 바퀴 돌려요!';
     $('gesture-description').textContent = mode === 'presence' ? '머리와 어깨가 보이면 동작 안내가 자동으로 시작돼요.' : mode === 'pose' ? starter.description : '손잡이를 잡은 뒤 크게 한 바퀴 휘둘러 주세요. 원을 맞춰 그리지 않아도 되고, 손이 잠깐 안 보여도 이어집니다.';
   }
@@ -233,7 +234,14 @@
     if (error) return false;
     return true;
   }
-  function showDrawStage(stage) { $('draw-page').dataset.drawStage = stage; }
+  function updateCameraPresentation() {
+    const draw = $('draw-page');
+    document.body.classList.toggle('camera-presentation', !draw.hidden && draw.dataset.drawStage === 'camera');
+  }
+  function showDrawStage(stage) {
+    $('draw-page').dataset.drawStage = stage;
+    updateCameraPresentation();
+  }
   function spin(direction = 'clockwise') {
     if (!canStart()) return;
     const wheel = $('draw-wheel');
@@ -373,6 +381,7 @@
     if (busy && !draw) { history.replaceState(null, '', '#draw'); return; }
     if (draw && inputError()) { history.replaceState(null, '', '#setup'); $('validation-message').textContent = inputError(); return route(); }
     $('setup-page').hidden = draw; $('draw-page').hidden = !draw;
+    updateCameraPresentation();
     if (!draw && (camera?.running || camera?.connecting)) camera.stop();
     $('setup-tab').classList.toggle('active', !draw); $('draw-tab').classList.toggle('active', draw);
     $('setup-tab').setAttribute('aria-current', draw ? 'false' : 'page'); $('draw-tab').setAttribute('aria-current', draw ? 'page' : 'false');
@@ -419,6 +428,7 @@
     $('camera-button-label').textContent = ready ? '카메라 끄기' : connecting ? '연결 취소' : '카메라 연결';
     $('camera-label-text').textContent = ready ? 'LIVE · 이 기기에서 분석 중' : connecting ? '카메라 준비 중' : '카메라 대기 중';
     $('camera-preview').classList.toggle('is-live', ready);
+    $('camera-scene').classList.toggle('is-live', ready);
     $('camera-video').hidden = !ready; $('tracking-overlay').hidden = !ready;
     $('camera-empty').hidden = ready;
     $('camera-error').textContent = phase === 'error' ? message : '';
@@ -463,6 +473,7 @@
     document.body.classList.toggle('roulette-fullscreen', full);
     const label = full ? '전체화면 종료' : '전체화면';
     $('roulette-fullscreen').setAttribute('aria-label', label); $('roulette-fullscreen').title = label;
+    if (full && !$('draw-page').hidden) window.scrollTo(0, 0);
   });
   $('restart-camera').addEventListener('click', () => {
     if (busy || camera.connecting) return;
