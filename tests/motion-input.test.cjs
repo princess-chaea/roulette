@@ -202,3 +202,23 @@ test('operator keeps acquired pose dwell across a supported soft-shoulder sighti
   assert.equal(confused.progress,continued.progress);
   assert.equal(confused.matched,false);
 });
+
+test('participant recovery detects pale clothing-sized areas even without whole-frame overexposure', () => {
+  const width=64,height=48;
+  const scene=pixels(width,height,(x,y)=> x>=28 && x<36 && y>=12 && y<28 ? 236 : 169);
+  assert.equal(lightingMode(scene,width,height),'original');
+  assert.equal(lightingMode(scene,width,height,true),'pale');
+});
+
+test('pale correction strengthens existing light-on-light edges without fabricating edges in clipped whites', () => {
+  const width=10,height=8, scratch=new Uint8Array(width*height);
+  const scene=pixels(width,height,x=>x<5?218:241);
+  correctPixels(scene,'pale',width,height,scratch);
+  const at=(d,x,y)=>d[(y*width+x)*4];
+  assert.ok(at(scene,5,4)-at(scene,4,4)>241-218);
+  assert.ok(at(scene,7,4)<241);
+  assert.equal(scene[3],255);
+  const flat=pixels(width,height,()=>255);
+  correctPixels(flat,'pale',width,height,scratch);
+  assert.equal(at(flat,0,0),at(flat,5,4));
+});

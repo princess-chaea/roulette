@@ -141,7 +141,7 @@
 
   function luminance(r, g, b) { return (54 * r + 183 * g + 19 * b) >> 8; }
 
-  function lightingMode(data, width, height) {
+  function lightingMode(data, width, height, recovering = false) {
     let count = 0, light = 0, dark = 0, centerCount = 0, centerLight = 0, centerSum = 0;
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
@@ -157,6 +157,11 @@
     const centerMean = centerSum / Math.max(1, centerCount);
     const brightRatio = light / count, darkRatio = dark / count, centerBright = centerLight / Math.max(1, centerCount);
     if (brightRatio >= .17 && centerMean < 139 && (darkRatio >= .12 || centerMean < 105)) return 'backlit';
+    if (!recovering && brightRatio >= .70) return 'bright';
+    // Near-white sleeves can blend into a pale backdrop even when the
+    // whole image is not overexposed. Favor the center when reacquiring.
+    if ((centerBright >= .24 && centerMean >= 165) ||
+        (recovering && centerBright >= .15 && centerMean >= 145)) return 'pale';
     if (brightRatio >= .43 || (centerBright >= .38 && centerMean > 185)) return 'bright';
     return 'original';
   }
@@ -167,16 +172,30 @@
   const adjustments = {
     backlit: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
       y + 42 * Math.sin(Math.PI * (y / 255) ** .52) - 22 * (y / 255) ** 3)),
+    pale: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
+      y <= 165 ? .76 * y : 125.4 + 1.24 * (y - 165))),
     bright: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
       y + 14 * Math.sin(Math.PI * y / 255) - 30 * (y / 255) ** 3))
   };
 
-  function correctPixels(data, mode) {
+  function correctPixels(data, mode, width = 0, height = 0, luma = null) {
     const curve = adjustments[mode];
     if (!curve) return;
+    const separateEdges = mode === 'pale' && luma?.length === width * height && luma.length * 4 === data.length;
+    if (separateEdges) for (let n = 0; n < luma.length; n++) {
+      const i = n * 4;
+      luma[n] = luminance(data[i], data[i + 1], data[i + 2]);
+    }
     for (let i = 0; i < data.length; i += 4) {
-      const y = luminance(data[i], data[i + 1], data[i + 2]);
-      const delta = curve[y] - y;
+      const n = i >> 2;
+      const y = separateEdges ? luma[n] : luminance(data[i], data[i + 1], data[i + 2]);
+      let delta = curve[y] - y;
+      if (separateEdges && y >= 150 && y < 252 && n >= width && n < (height - 1) * width &&
+          n % width !== 0 && n % width !== width - 1) {
+        const diff = y - (luma[n - 1] + luma[n + 1] + luma[n - width] + luma[n + width]) / 4;
+        // Boost existing edges in light areas, not flat whites or small noise.
+        if (Math.abs(diff) >= 4) delta += clamp(diff * .48, -14, 14);
+      }
       data[i] += delta; data[i + 1] += delta; data[i + 2] += delta;
     }
   }
@@ -197,6 +216,7 @@
       }
       this.sample = this.frame = this.output = null; this.mode = 'original';
       this.sampleAt = this.rawProbeAt = -Infinity; this.disabled = false;
+      this.sampledRecovery = false; this.luma = null;
     }
     disable() { this.reset(); this.disabled = true; }
     buffer(name, width, height) {
@@ -214,12 +234,12 @@
     source(video, time, recovering) {
       if (this.disabled || !video.videoWidth || !video.videoHeight) return video;
       try {
-        if (time - this.sampleAt >= 300) {
-          this.sampleAt = time;
+        if (time - this.sampleAt >= 300 || (recovering && !this.sampledRecovery && time - this.sampleAt >= 160)) {
+          this.sampleAt = time; this.sampledRecovery = recovering;
           const width = 64, height = 48;
           const { ctx } = this.buffer('sample', width, height);
           ctx.drawImage(video, 0, 0, width, height);
-          this.mode = lightingMode(ctx.getImageData(0, 0, width, height).data, width, height);
+          this.mode = lightingMode(ctx.getImageData(0, 0, width, height).data, width, height, recovering);
         }
         const { width: outWidth, height: outHeight } = analysisSize(video.videoWidth, video.videoHeight);
         const raw = () => {
@@ -238,7 +258,8 @@
         const { canvas, ctx } = this.buffer('frame', width, height);
         ctx.drawImage(video, 0, 0, width, height);
         const pixels = ctx.getImageData(0, 0, width, height);
-        correctPixels(pixels.data, this.mode);
+        if (this.mode === 'pale' && this.luma?.length !== width * height) this.luma = new Uint8Array(width * height);
+        correctPixels(pixels.data, this.mode, width, height, this.luma);
         ctx.putImageData(pixels, 0, 0);
         if (scale === 1) return canvas;
         // Keep the Pose Landmarker VIDEO input dimensions identical to the
