@@ -182,7 +182,7 @@ test('camera and popup share in-frame progress, a horizontal guide and display-o
   assert.match(css, /\.camera-guide-bounds \.camera-meter\s*\{[^}]*inset:[^;]* auto;/);
   assert.match(css, /\.live-guide img\s*\{[^}]*grid-column:1; grid-row:1;/);
   assert.match(css, /\.live-guide > div\s*\{[^}]*grid-column:2; grid-row:1;/);
-  assert.match(css, /\.camera-picture\s*\{[^}]*filter:brightness\(\.90\) contrast\(1\.12\)/);
+  assert.match(css, /\.camera-picture\s*\{[^}]*filter:brightness\(\.80\) contrast\(1\.06\) saturate\(\.84\)/);
   assert.doesNotMatch(css, /tracking-overlay/);
   const mirror = readFileSync(resolve(__dirname, '../camera-window.js'), 'utf8');
   assert.match(mirror, /camera-display-style/);

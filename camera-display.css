@@ -1,6 +1,6 @@
 /* Presentation-only tone correction. Pose inference still reads the raw video
    (or its own independently normalized input); the tracking overlay is untouched. */
-.camera-picture { filter:brightness(.90) contrast(1.12); }
+.camera-picture { filter:brightness(.80) contrast(1.06) saturate(.84); }
 
 /* Keep overlays inside the painted video, not the black side bars. */
 .camera-guide-bounds {
