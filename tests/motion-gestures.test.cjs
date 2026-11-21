@@ -708,3 +708,35 @@ test('a wide rounded heart with separated hands near forehead passes; upright an
     }
   }
 });
+
+test('a shoulder-level false wrist cannot grab the crank, but a hand extended into the guide can', () => {
+  const detector=new GestureDetector();detector.setMode('circle');
+  const bag=upperBody(), aspect=16/9;
+  bag[0].y=.30;bag[11].y=bag[12].y=.50;
+  const target=detector.update(bag,0,aspect).target;
+  const inner=1-target.startX;
+  // The false right wrist is at the inside edge of the start region, collapsed onto its shoulder.
+  bag[16]=point(.40,.50);bag[15]=null;
+  for(let t=100;t<=600;t+=100) {
+    const r=detector.update(bag,t,aspect);
+    assert.equal(r.grip.held,false);
+    assert.equal(r.progress,0);
+  }
+  bag[16]=point(inner,.50);
+  for(let t=700;t<=900;t+=100)detector.update(bag,t,aspect);
+  assert.equal(detector.lastResult.grip.held,true);
+});
+
+test('hand recovery tracks the original crank wrist even when the other one remains clear', () => {
+  const flow=new MotionFlow(), aspect=16/9;
+  for(let t=0;t<=2100;t+=100)flow.update(upperBody(true),t,aspect);
+  const p=upperBody(), target=flow.lastResult.target;
+  p[15]=point(1-target.startX,target.startY);
+  for(let t=2200;t<=2500;t+=100)flow.update(p,t,aspect);
+  assert.equal(flow.crankShoulder,11);
+  assert.equal(flow.needsDetail(p),false);
+  p[15]=null;
+  assert.equal(flow.needsDetail(p),true);
+  assert.equal(flow.update(p,2600,aspect).progress,12);
+  assert.equal(flow.update(p,2900,aspect).matched,false);
+});

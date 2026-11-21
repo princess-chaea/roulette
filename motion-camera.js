@@ -122,7 +122,7 @@
           poses = [];
         }
         let previousMode = this.detector.mode;
-        let selection = this.participant.select(poses, time, aspect, previousMode);
+        let selection = this.participant.select(poses, time, aspect, previousMode, this.detector.crankShoulder);
         if (!selection.points && this.detector.waitingForFirstGesture) {
           this.preGestureLostAt ??= time;
           if (time - this.preGestureLostAt >= 220) {
@@ -130,7 +130,7 @@
             // check if someone stepped away just as the pose prompt opened.
             this.participant.reset(); this.detector.reset();
             previousMode = this.detector.mode;
-            selection = this.participant.select(poses, time, aspect, previousMode);
+            selection = this.participant.select(poses, time, aspect, previousMode, this.detector.crankShoulder);
             this.preGestureLostAt = null;
           }
         } else this.preGestureLostAt = null;
@@ -141,7 +141,7 @@
         if (paused) recognition.message = overlap
           ? '뒤 사람과 겹쳤어요. 한 발 앞으로 나오면 이어서 진행해요.'
           : '같은 참가자의 얼굴과 팔이 다시 보이면 이어서 진행해요.';
-        this.recovering = !points;
+        this.recovering = !points || this.detector.needsDetail?.(points) === true;
         this.draw(points, recognition);
         this.onResult(recognition);
       } catch {

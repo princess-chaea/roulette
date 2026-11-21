@@ -65,12 +65,18 @@
       this.locked = true;
       this.anchor = this.current;
     }
-    select(poses, time, aspect, mode) {
+    select(poses, time, aspect, mode, crankShoulder = null) {
       const gap = this.missed || time - this.lastSeen > 350;
       // A padded sleeve or bag strap can briefly weaken one shoulder.
       // Do not use this as evidence for acquiring or reacquiring a person.
-      const allowSoft = this.locked && !gap && mode === 'pose' && time - this.lastStrongSeen <= SOFT_SHOULDER_MS;
-      const bodies = (poses || []).map(points => upperBody(points, aspect, allowSoft)).filter(Boolean);
+      const allowSoft = this.locked && !gap && time - this.lastStrongSeen <= SOFT_SHOULDER_MS;
+      const bodies = (poses || []).map(points => {
+        // While turning, only relax the *opposite* shoulder. The original
+        // winding hand and its shoulder must still be genuinely visible.
+        const activeArmVisible = mode === 'circle' && (crankShoulder === 11 || crankShoulder === 12) &&
+          signal(points?.[crankShoulder]) && signal(points?.[crankShoulder + 4], .45);
+        return upperBody(points, aspect, allowSoft && (mode === 'pose' || activeArmVisible));
+      }).filter(Boolean);
       const rememberOthers = winner => {
         const others = bodies.filter(body => body !== winner && !body.softShoulder);
         if (others.length) { this.others = others; this.othersSeen = time; }
@@ -142,7 +148,7 @@
   function luminance(r, g, b) { return (54 * r + 183 * g + 19 * b) >> 8; }
 
   function lightingMode(data, width, height, recovering = false) {
-    let count = 0, light = 0, dark = 0, centerCount = 0, centerLight = 0, centerSum = 0;
+    let count = 0, light = 0, dark = 0, centerCount = 0, centerLight = 0, centerDark = 0, centerSum = 0;
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4;
       const luma = luminance(data[i], data[i + 1], data[i + 2]);
@@ -152,6 +158,7 @@
       if (x >= .28 * width && x < .72 * width && y >= .12 * height && y < .67 * height) {
         centerCount++; centerSum += luma;
         if (luma >= 232) centerLight++;
+        if (luma <= 68) centerDark++;
       }
     }
     const centerMean = centerSum / Math.max(1, centerCount);
@@ -162,6 +169,8 @@
     // whole image is not overexposed. Favor the center when reacquiring.
     if ((centerBright >= .24 && centerMean >= 165) ||
         (recovering && centerBright >= .15 && centerMean >= 145)) return 'pale';
+    // Try a shadow lift when the hand/body is being lost in dark clothing.
+    if (recovering && centerDark >= centerCount * .23 && centerMean < 152) return 'shadow';
     if (brightRatio >= .43 || (centerBright >= .38 && centerMean > 185)) return 'bright';
     return 'original';
   }
@@ -172,6 +181,8 @@
   const adjustments = {
     backlit: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
       y + 42 * Math.sin(Math.PI * (y / 255) ** .52) - 22 * (y / 255) ** 3)),
+    shadow: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
+      y + 48 * (y / 62) * Math.exp(1 - y / 62) * (1 - y / 255))),
     pale: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(
       y <= 165 ? .76 * y : 125.4 + 1.24 * (y - 165))),
     bright: Uint8ClampedArray.from({ length: 256 }, (_, y) => Math.round(

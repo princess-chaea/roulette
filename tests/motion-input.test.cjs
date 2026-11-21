@@ -222,3 +222,49 @@ test('pale correction strengthens existing light-on-light edges without fabricat
   correctPixels(flat,'pale',width,height,scratch);
   assert.equal(at(flat,0,0),at(flat,5,4));
 });
+
+test('dark fabric in the center gets a detail boost only when tracking needs recovery', () => {
+  const width=64,height=48;
+  const d=pixels(width,height,(x,y)=>x>19&&x<44&&y>13&&y<34?38:124);
+  assert.equal(lightingMode(d,width,height),'original');
+  assert.equal(lightingMode(d,width,height,true),'shadow');
+  const i=(22*width+32)*4;
+  correctPixels(d,'shadow');
+  assert.ok(d[i]>=65);
+  assert.equal(d[i+3],255);
+});
+
+test('a short loss on the opposite shoulder does not break a confirmed crank with the active hand visible', () => {
+  const tracker=new ParticipantTracker(), main=person();
+  const weak=main.map(p=>p&&({...p}));
+  weak[12].presence=.48;
+  tracker.select([main],0,1,'presence');tracker.lock();
+  assert.equal(tracker.select([weak],100,1,'circle',11).bodyConfidence,.42);
+  const contender=person({x:.518});
+  assert.equal(tracker.select([weak,contender],200,1,'circle',11).points,null);
+  const missing=weak.map(p=>p&&({...p}));missing[15]=null;
+  assert.equal(tracker.select([missing],300,1,'circle',11).points,null);
+});
+
+test('HD recovery runs white or dark correction without changing the camera or inference size', () => {
+  for(const style of ['pale','shadow']) {
+    let corrected=0;
+    const input=new ExposureInput(()=>({getContext:()=>({
+      drawImage(){},
+      getImageData(x,y,w,h) {
+        return {data:pixels(w,h,(xx,yy)=>style==='pale'?
+          (xx>w*.44&&xx<w*.57&&yy>h*.25&&yy<h*.58?236:169):
+          (xx>w*.30&&xx<w*.70&&yy>h*.25&&yy<h*.70?38:124))};
+      },
+      putImageData(){corrected++;}
+    })}));
+    const video={videoWidth:1920,videoHeight:1080};
+    input.source(video,0,false);
+    input.source(video,180,true);
+    const frame=input.source(video,240,true);
+    assert.equal(input.mode,style);
+    assert.equal(corrected,1);
+    assert.deepEqual([frame.width,frame.height],[640,360]);
+    assert.deepEqual([video.videoWidth,video.videoHeight],[1920,1080]);
+  }
+});

@@ -62,6 +62,19 @@
     return { x: 1 - points[arm.wrist].x, y: points[arm.wrist].y };
   }
 
+  // Bag straps can be interpreted as wrists touching the torso. Reject a
+  // collapsed arm when acquiring the grip; don't require the elbow to
+  // remain visible once the participant is actually turning.
+  function gripWrist(points, arm, frame, aspect) {
+    const wrist = points?.[arm.wrist], shoulder = points?.[arm.shoulder], elbow = points?.[arm.elbow];
+    if (!visible(wrist, .45) || !visible(shoulder, .55)) return null;
+    const separation = (a, b) => Math.hypot(a.x - b.x, (a.y - b.y) / aspect) / frame.span;
+    const reach = separation(wrist, shoulder);
+    if (reach < .24 || reach > 3.1) return null;
+    if (visible(elbow, .45) && separation(wrist, elbow) < .08 && reach < .40) return null;
+    return wristAt(points, arm);
+  }
+
   // Estimate the centre from the user's own sweep. A break starts a new
   // observed stroke: neither its distance nor its angle crosses an unseen gap.
   function trackFreeSweep(trace, wrist, aspect, time) {
@@ -356,7 +369,7 @@
       if (this.circle && !this.circle.rebase && discontinuous(this.circle.body, frame, aspect)) return restart('몸을 가운데 두고 다시 준비해 주세요.');
       const startDistance = wrist => Math.hypot(wrist.x - target.startX, (wrist.y - target.startY) / aspect);
       if (!this.circle) {
-        const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: wristAt(points, arm) }))
+        const candidates = [LEFT, RIGHT].map(arm => ({ arm, wrist: gripWrist(points, arm, frame, aspect) }))
           .filter(c => c.wrist).sort((a, b) => startDistance(a.wrist) - startDistance(b.wrist));
         if (!candidates.length || startDistance(candidates[0].wrist) > target.grabRadius) {
           return status('한 손을 화면 가운데 손잡이에 올려 주세요.', 0, { target, ...idleGrip(target) });
@@ -365,7 +378,7 @@
           net: 0, direction: 0, furthest: 0, samples: 0, movingSince: null, lastMotionTime: time, lastWristTime: time };
       }
       const arc = this.circle;
-      const wrist = wristAt(points, arc.arm);
+      const wrist = arc.angle === null ? gripWrist(points, arc.arm, frame, aspect) : wristAt(points, arc.arm);
       if (!wrist && this.tuning.retainProgress && arc.angle !== null) {
         return this.interrupt('같은 손이 다시 보이면 이어서 돌려 주세요.');
       }
@@ -454,6 +467,17 @@
     }
 
     get poseKind() { return this.detector.poseKind; }
+    get crankShoulder() {
+      const arc = this.detector.circle;
+      return this.mode === 'circle' && arc && arc.angle !== null ? arc.arm.shoulder : null;
+    }
+    needsDetail(points) {
+      if (this.mode !== 'circle') return false;
+      const shoulder = this.crankShoulder;
+      return shoulder !== null
+        ? !wristAt(points, shoulder === LEFT.shoulder ? LEFT : RIGHT)
+        : !wristAt(points, LEFT) && !wristAt(points, RIGHT);
+    }
     get waitingForFirstGesture() { return this.mode === 'pose' && this.detector.poseHeldMs === 0; }
 
     setPoseKind(kind) {
@@ -473,7 +497,7 @@
     }
 
     update(points, time, aspect = 1, continuityConfidence) {
-      const bodyConfidence = this.mode === 'pose' && Number.isFinite(continuityConfidence)
+      const bodyConfidence = (this.mode === 'pose' || this.crankShoulder !== null) && Number.isFinite(continuityConfidence)
         ? clamp(continuityConfidence, .42, this.tuning.confidence) : this.tuning.confidence;
       if (this.done) return { ...this.lastResult, matched: false };
       const frame = Number.isFinite(time) && Number.isFinite(aspect) && aspect > 0
