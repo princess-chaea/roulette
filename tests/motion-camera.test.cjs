@@ -44,7 +44,12 @@ function rig(getUserMedia, createEngine, useActualGestures = false) {
   }
   const sandbox = {
     Image: class { constructor() { this.complete = false; } },
-    URL, location: { protocol: 'http:' }, document: { baseURI: 'http://localhost/' }, isSecureContext: true,
+    URL, location: { protocol: 'http:' }, document: { baseURI: 'http://localhost/', createElement: () => ({
+      getContext: () => ({
+        drawImage() {},
+        getImageData(x,y,w,h) { return { data:new Uint8ClampedArray(w*h*4).fill(120) }; }
+      })
+    }) }, isSecureContext: true,
     navigator: { mediaDevices: { getUserMedia } }, performance: { now: () => now },
     requestAnimationFrame(callback) { frames.set(++nextId, callback); return nextId; },
     cancelAnimationFrame(id) { frames.delete(id); },
@@ -53,8 +58,9 @@ function rig(getUserMedia, createEngine, useActualGestures = false) {
   };
   runInNewContext(source, sandbox, { filename: 'motion-camera.js' });
   const phases = [], results = [];
+  const overlay = { getContext: () => ({ clearRect() {}, setLineDash() {}, strokeRect() {} }) };
   const camera = new sandbox.MotionCamera({
-    video, canvas: { getContext: () => ({ clearRect() {}, setLineDash() {}, strokeRect() {} }) },
+    video, canvas: overlay,
     onState: state => phases.push(state.phase), onResult: result => results.push(result), canRecognize: () => true
   });
   camera.createEngine = createEngine;
@@ -66,7 +72,7 @@ function rig(getUserMedia, createEngine, useActualGestures = false) {
     now += 120; video.currentTime += 0.12;
     callback();
   }
-  return { camera, nextFrame, video, frames, phases, results };
+  return { camera, nextFrame, video, frames, phases, results, overlay };
 }
 
 test('canceling a permission request releases a late stream without attaching it or loading a model', async () => {
@@ -235,4 +241,43 @@ test('once a starter has progress, standing aside with a bystander never rearms 
   nextFrame(); nextFrame(); nextFrame();
   assert.ok(results.at(-1).progress > progress);
   camera.dispose();
+});
+
+
+test('Full HD capture is a preference; model and tracking stay at a smaller matching aspect ratio', async () => {
+  const granted = stream(), requests = [], modelInputs = [];
+  const { camera, video, nextFrame, overlay } = rig(async request => {
+    requests.push(request);
+    return granted;
+  }, async () => ({ detectForVideo(source) { modelInputs.push(source); return { landmarks:[] }; }, close() {} }));
+  video.videoWidth = 1920; video.videoHeight = 1080;
+  await camera.start();
+  camera.setActive(true);
+  nextFrame();
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].video.width.ideal, 1920);
+  assert.equal(requests[0].video.height.ideal, 1080);
+  assert.equal(requests[0].audio, false);
+  assert.equal(video.srcObject, granted);
+  const [input] = modelInputs;
+  assert.notEqual(input, video);
+  assert.deepEqual([input.width,input.height], [640,360]);
+  assert.deepEqual([overlay.width,overlay.height], [640,360]);
+  camera.dispose();
+});
+
+test('a resolution rejection attempts 720p but a denied permission does not reprompt', async () => {
+  for (const reason of ['OverconstrainedError', 'NotAllowedError']) {
+    const widths = [];
+    const { camera } = rig(async request => {
+      widths.push(request.video.width.ideal);
+      if (widths.length === 1) throw Object.assign(new Error(reason), { name:reason });
+      return stream();
+    }, async () => engine());
+    await camera.start();
+    const isResolution = reason === 'OverconstrainedError';
+    assert.deepEqual(widths, isResolution ? [1920,1280] : [1920]);
+    assert.equal(camera.running, isResolution);
+    camera.dispose();
+  }
 });

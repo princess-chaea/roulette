@@ -164,6 +164,13 @@
     }
   }
 
+  // Keep pose processing at the previous pixel budget, even on a Full HD feed.
+  // Retaining the sensor aspect ratio keeps normalized points aligned with video.
+  function analysisSize(width, height) {
+    const scale = Math.min(1, 640 / width, 480 / height);
+    return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
+  }
+
   class ExposureInput {
     constructor(createCanvas) { this.createCanvas = createCanvas; this.reset(); }
     reset() {
@@ -197,13 +204,20 @@
           ctx.drawImage(video, 0, 0, width, height);
           this.mode = lightingMode(ctx.getImageData(0, 0, width, height).data, width, height);
         }
-        if (this.mode === 'original') return video;
+        const { width: outWidth, height: outHeight } = analysisSize(video.videoWidth, video.videoHeight);
+        const raw = () => {
+          if (outWidth === video.videoWidth && outHeight === video.videoHeight) return video;
+          const { canvas, ctx } = this.buffer('output', outWidth, outHeight);
+          ctx.drawImage(video, 0, 0, outWidth, outHeight);
+          return canvas;
+        };
+        if (this.mode === 'original') return raw();
         // If the corrected frame isn't yielding a participant, periodically
         // try the raw frame instead. Never run inference twice per video frame.
-        if (recovering && time - this.rawProbeAt >= 650) { this.rawProbeAt = time; return video; }
-        const scale = Math.min(1, 480 / Math.max(video.videoWidth, video.videoHeight));
-        const width = Math.max(1, Math.round(video.videoWidth * scale));
-        const height = Math.max(1, Math.round(video.videoHeight * scale));
+        if (recovering && time - this.rawProbeAt >= 650) { this.rawProbeAt = time; return raw(); }
+        const scale = Math.min(1, 480 / Math.max(outWidth, outHeight));
+        const width = Math.max(1, Math.round(outWidth * scale));
+        const height = Math.max(1, Math.round(outHeight * scale));
         const { canvas, ctx } = this.buffer('frame', width, height);
         ctx.drawImage(video, 0, 0, width, height);
         const pixels = ctx.getImageData(0, 0, width, height);
@@ -211,9 +225,9 @@
         ctx.putImageData(pixels, 0, 0);
         if (scale === 1) return canvas;
         // Keep the Pose Landmarker VIDEO input dimensions identical to the
-        // raw frame; only the expensive per-pixel correction is downsampled.
-        const output = this.buffer('output', video.videoWidth, video.videoHeight);
-        output.ctx.drawImage(canvas, 0, 0, video.videoWidth, video.videoHeight);
+        // unadjusted analysis frame; the color correction uses a smaller buffer.
+        const output = this.buffer('output', outWidth, outHeight);
+        output.ctx.drawImage(canvas, 0, 0, outWidth, outHeight);
         return output.canvas;
       } catch {
         this.disable();
@@ -222,7 +236,7 @@
     }
   }
 
-  const api = { ParticipantTracker, ExposureInput, lightingMode, correctPixels };
+  const api = { ParticipantTracker, ExposureInput, analysisSize, lightingMode, correctPixels };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else globalThis.MotionInput = api;
 })();

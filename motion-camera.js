@@ -2,6 +2,21 @@
 (() => {
   'use strict';
   const BASE = new URL('assets/vendor/mediapipe/', document.baseURI);
+  async function requestDisplayStream(sequenceIsCurrent) {
+    const capture = (width, height) => ({
+      audio: false,
+      video: { facingMode: { ideal: 'user' }, width: { ideal: width }, height: { ideal: height }, frameRate: { ideal: 30 } }
+    });
+    // Ideal resolutions let the browser pick a supported camera mode, without
+    // rejecting lower-resolution webcams or a different aspect ratio.
+    try { return await navigator.mediaDevices.getUserMedia(capture(1920, 1080)); }
+    catch (error) {
+      // Some drivers reject a high-resolution request instead of negotiating.
+      // Do not retry a denied permission or a canceled connection.
+      if (error?.name !== 'OverconstrainedError' || !sequenceIsCurrent()) throw error;
+      return navigator.mediaDevices.getUserMedia(capture(1280, 720));
+    }
+  }
   const CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]];
   const VISIBLE_POINTS = [11,12,13,14,15,16,23,24];
   const permissionMessage = error => ({
@@ -39,7 +54,7 @@
       const sequence = ++this.sequence;
       this.state('connecting', '카메라 접근을 허용해 주세요.');
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 }, frameRate: { ideal: 24, max: 30 } } });
+        const stream = await requestDisplayStream(() => sequence === this.sequence);
         if (sequence !== this.sequence) { stream.getTracks().forEach(t => t.stop()); return; }
         this.stream = stream;
         stream.getVideoTracks().forEach(track => track.addEventListener('ended', () => {
@@ -133,7 +148,7 @@
       }
     }
     draw(points, result) {
-      const width = this.video.videoWidth, height = this.video.videoHeight;
+      const { width, height } = MotionInput.analysisSize(this.video.videoWidth, this.video.videoHeight);
       if (this.canvas.width !== width || this.canvas.height !== height) { this.canvas.width = width; this.canvas.height = height; }
       const ctx = this.canvas.getContext('2d'); ctx.clearRect(0, 0, width, height);
       const valid = p => p && (p.visibility ?? 1) >= .55 && (p.presence ?? 1) >= .55;

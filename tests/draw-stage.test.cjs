@@ -186,7 +186,7 @@ test('camera and popup share in-frame progress, a horizontal guide and display-o
   assert.doesNotMatch(css, /tracking-overlay/);
   const mirror = readFileSync(resolve(__dirname, '../camera-window.js'), 'utf8');
   assert.match(mirror, /camera-display-style/);
-  assert.match(mirror, /canvas\.className = 'camera-picture'/);
+  assert.match(mirror, /preview\.className = 'camera-picture'/);
   assert.match(mirror, /guideBounds\.append\(meter\)/);
   assert.match(mirror, /progress\.setAttribute\('aria-valuenow', percent\)/);
 });

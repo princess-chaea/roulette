@@ -13,12 +13,14 @@
 
 .camera-guide-bounds .camera-meter {
   position:absolute; inset:clamp(5px,1.3cqw,14px) clamp(6px,2cqw,20px) auto;
-  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(6px,1.3cqw,13px);
+  display:grid; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:clamp(6px,1.3cqw,13px);
   margin:0; padding:clamp(4px,.8cqw,8px) clamp(7px,1.4cqw,14px);
   color:#f2ffdf; background:#102720ed; border:1px solid #f4fff47a; border-radius:10px;
   font:700 clamp(12px,2.3cqw,23px)/1.2 KERISBaeum,sans-serif; font-variant-numeric:tabular-nums;
 }
+.camera-resolution { white-space:nowrap; color:#d7e9d9; font:700 clamp(10px,1.65cqw,15px)/1.2 KERISBaeum,sans-serif; }
 .camera-guide-bounds .camera-meter .progress-track {
+  grid-column:2;
   height:clamp(6px,1.4cqw,13px); margin:0; width:100%; border-radius:999px;
   overflow:hidden; background:#6f8576;
 }

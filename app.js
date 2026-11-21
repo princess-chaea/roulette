@@ -444,6 +444,14 @@
     camera?.setPoseKind(presentation.starterForRound(state.history.length).kind);
     camera?.setActive(!!camera.running && !busy && !completedRound && !getError());
   }
+  function showCameraResolution() {
+    const video = $('camera-video'), badge = $('camera-resolution');
+    const { videoWidth, videoHeight } = video;
+    const resolution = !video.hidden && videoWidth && videoHeight ? `${videoWidth}×${videoHeight}` : '';
+    if (badge.textContent !== resolution) badge.textContent = resolution;
+    badge.hidden = !resolution;
+  }
+  $('camera-video').addEventListener('resize', showCameraResolution);
   function cameraState({ phase, message }) {
     const ready = phase === 'ready', connecting = phase === 'connecting';
     $('camera-status').textContent = ready ? '카메라 ON' : connecting ? '준비 중' : '연결 안 됨';
@@ -454,6 +462,7 @@
     $('camera-scene').classList.toggle('is-live', ready);
     $('camera-video').hidden = !ready; $('tracking-overlay').hidden = !ready;
     $('camera-empty').hidden = ready;
+    showCameraResolution();
     $('camera-error').textContent = phase === 'error' ? message : '';
     resetAutoMotion(); setProgress(0, ready ? MotionGestures.PRESENCE_HINT : message); updateControls();
   }

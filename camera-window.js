@@ -12,6 +12,7 @@
     current.popup.cancelAnimationFrame(current.frame);
     current.observer?.disconnect();
     current.stopWatchingFit?.();
+    if (current.preview) current.preview.srcObject = null;
     announce(false);
   }
 
@@ -64,8 +65,9 @@
       header .research-logo { width:clamp(108px,28vw,217px); max-width:47%; max-height:40px; object-fit:contain; object-position:right; }
       main { display:grid; grid-template:minmax(0,1fr)/minmax(0,1fr); min-height:0; padding:4px; }
       .feed { position:relative; display:grid; place-items:center; min-height:0; overflow:hidden; }
-      canvas { position:absolute; inset:0; height:100%; width:100%; object-fit:contain; }
+      .feed > :is(video,canvas) { position:absolute; inset:0; height:100%; width:100%; object-fit:contain; }
       .waiting { padding:1rem; color:#edf5d7; font-size:clamp(18px,3vw,31px); text-align:center; }
+      .feed > video { transform:scaleX(-1); }
       .feed-tracking { z-index:2; pointer-events:none; }
       footer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(8px,1.5vw,22px); padding:8px clamp(10px,2vw,24px); background:#fafbf3; }
       .feedback { margin:0; color:#557047; font-size:13px; }
@@ -111,10 +113,11 @@
     const stage = element('main', doc.body);
     const feed = element('div', stage);
     feed.className = 'feed';
-    const canvas = element('canvas', feed);
-    canvas.className = 'camera-picture';
-    canvas.setAttribute('aria-label', '거울 카메라 영상과 동작 인식 표시');
-    const context = canvas.getContext('2d');
+    const preview = element('video', feed);
+    current.preview = preview;
+    preview.className = 'camera-picture';
+    preview.muted = true; preview.autoplay = true; preview.playsInline = true;
+    preview.setAttribute('aria-label', '좌우가 반전된 카메라 영상');
     const tracking = element('canvas', feed);
     tracking.className = 'feed-tracking';
     tracking.setAttribute('aria-hidden', 'true');
@@ -129,6 +132,7 @@
     const progress = meter.querySelector('[role="progressbar"]');
     const progressFill = progress.firstElementChild;
     const progressNumber = meter.lastElementChild;
+    const resolution = meter.querySelector('.camera-resolution');
     const guidePanel = element('aside', guideBounds);
     guidePanel.className = 'live-guide';
     guidePanel.setAttribute('aria-label', '현재 동작 안내');
@@ -190,7 +194,7 @@
     }
     const video = source('camera-video');
     const overlay = source('tracking-overlay');
-    current.stopWatchingFit = RoulettePresentation.watchContainedFrame(feed, video, guideBounds);
+    current.stopWatchingFit = RoulettePresentation.watchContainedFrame(feed, preview, guideBounds);
     function syncInstructions() {
       syncResult();
       title.textContent = source('gesture-title').textContent;
@@ -199,6 +203,9 @@
       const percent = source('motion-progress').getAttribute('aria-valuenow');
       progress.setAttribute('aria-valuenow', percent);
       progressFill.style.width = progressNumber.textContent = percent + '%';
+      const cameraResolution = source('camera-resolution');
+      resolution.textContent = cameraResolution.textContent;
+      resolution.hidden = cameraResolution.hidden;
       const originalGuide = source('live-guide-image');
       if (guide.src !== originalGuide.src) guide.src = originalGuide.src;
       guide.hidden = originalGuide.hidden;
@@ -216,19 +223,21 @@
 
     function render() {
       if (view !== current || popup.closed) { release(current); return; }
-      const live = !video.hidden && video.readyState >= 2 && video.videoWidth > 0;
+      const stream = !video.hidden ? video.srcObject : null;
+      if (preview.srcObject !== stream) {
+        // Render the existing stream directly. Avoid rasterizing full-HD
+        // frames into a canvas at the popup's display refresh rate.
+        preview.srcObject = stream;
+        if (stream) preview.play().catch(() => {});
+      }
+      const live = !!stream && preview.readyState >= 2 && preview.videoWidth > 0;
       waiting.hidden = live;
-      guideBounds.hidden = canvas.hidden = !live;
-      tracking.hidden = !live;
-      if (live) {
-        const width = video.videoWidth, height = video.videoHeight;
-        if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-        context.setTransform(-1, 0, 0, 1, width, 0);
-        context.drawImage(video, 0, 0, width, height);
-        context.resetTransform();
+      guideBounds.hidden = preview.hidden = tracking.hidden = !live;
+      if (live && overlay.width && overlay.height) {
+        const { width, height } = overlay;
         if (tracking.width !== width || tracking.height !== height) { tracking.width = width; tracking.height = height; }
         trackingContext.clearRect(0, 0, width, height);
-        if (!overlay.hidden && overlay.width && overlay.height) trackingContext.drawImage(overlay, 0, 0, width, height);
+        if (!overlay.hidden) trackingContext.drawImage(overlay, 0, 0);
       }
       current.frame = popup.requestAnimationFrame(render);
     }

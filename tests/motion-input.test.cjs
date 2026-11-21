@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { ParticipantTracker, ExposureInput, lightingMode, correctPixels } = require('../motion-input.js');
+const { ParticipantTracker, ExposureInput, analysisSize, lightingMode, correctPixels } = require('../motion-input.js');
 const { MotionFlow } = require('../motion-gestures.js');
 
 const point = (x, y) => ({ x, y, visibility: 1, presence: 1 });
@@ -111,13 +111,13 @@ test('exposure classifier ignores ordinary frames and lifts shadows or compresse
   assert.ok(high[0] > 210);
 });
 
-test('adaptation limits buffer size, uses video probes and releases or falls back without another inference', () => {
-  const calls = [], buffers = [];
+test('Full HD correction and uncorrected probes share a bounded analysis frame', () => {
+  const calls = [], buffers = [], draws = [];
   const input = new ExposureInput(() => {
     const canvas = { width: 0, height: 0 };
     buffers.push(canvas);
     canvas.getContext = () => ({
-      drawImage() {},
+      drawImage(...args) { draws.push(args); },
       getImageData(x, y, width, height) { return { data: pixels(width, height, (xx, yy) => backlit(xx,yy,width,height)) }; },
       putImageData({ data }) { calls.push(data[0]); },
     });
@@ -126,13 +126,15 @@ test('adaptation limits buffer size, uses video probes and releases or falls bac
   const video = { videoWidth: 1920, videoHeight: 1080 };
   const tuned = input.source(video, 0, false);
   assert.notEqual(tuned, video);
-  assert.equal(tuned.width, video.videoWidth);
-  assert.equal(tuned.height, video.videoHeight);
+  assert.equal(tuned.width, 640);
+  assert.equal(tuned.height, 360);
   assert.equal(buffers[1].width, 480);
   assert.equal(buffers[1].height, 270);
-  assert.equal(input.source(video, 100, true), video);
+  assert.equal(input.source(video, 100, true), tuned);
+  assert.deepEqual(draws.at(-1), [video, 0, 0, 640, 360]);
   assert.equal(input.source(video, 200, true), tuned);
-  assert.equal(input.source(video, 750, true), video);
+  assert.equal(input.source(video, 750, true), tuned);
+  assert.deepEqual(draws.at(-1), [video, 0, 0, 640, 360]);
   assert.equal(calls.length, 2);
   input.reset();
   assert.equal(tuned.width, 0);
@@ -140,4 +142,11 @@ test('adaptation limits buffer size, uses video probes and releases or falls bac
   const broken = new ExposureInput(() => { throw new Error('unavailable'); });
   assert.equal(broken.source(video, 0, false), video);
   assert.equal(broken.disabled, true);
+});
+
+test('analysis sizing preserves aspect ratio and never scales a small camera up', () => {
+  assert.deepEqual(analysisSize(1920, 1080), { width:640, height:360 });
+  assert.deepEqual(analysisSize(1280, 720), { width:640, height:360 });
+  assert.deepEqual(analysisSize(1080, 1920), { width:270, height:480 });
+  assert.deepEqual(analysisSize(320, 240), { width:320, height:240 });
 });
