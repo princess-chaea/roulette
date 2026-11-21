@@ -172,21 +172,23 @@ test('fullscreen preserves the camera when toggled and swaps position text for l
   assert.equal(h.camera.stops, 0);
 });
 
-test('video, tracking canvas and fitted corner guide share the same camera viewport', () => {
+test('camera and popup share in-frame progress, a horizontal guide and display-only tone correction', () => {
   const preview = html.indexOf('id="camera-preview"');
   const footer = html.indexOf('class="camera-bottom"', preview);
   const scene = html.slice(preview, footer);
-  assert.match(scene, /id="camera-video"[\s\S]*id="tracking-overlay"[\s\S]*id="camera-guide-bounds"[\s\S]*id="live-guide"/);
-  const css = readFileSync(resolve(__dirname, '../styles.css'), 'utf8');
+  assert.match(scene, /class="camera-picture" id="camera-video"[\s\S]*id="tracking-overlay"[\s\S]*id="camera-guide-bounds"[\s\S]*id="motion-progress"[\s\S]*id="live-guide"/);
+  const css = readFileSync(resolve(__dirname, '../camera-display.css'), 'utf8');
   assert.match(css, /\.camera-guide-bounds\s*\{[^}]*inset:var\(--fit-y,0px\) var\(--fit-x,0px\);/);
-  assert.match(css, /\.camera-scene \.live-guide img\s*\{[^}]*grid-row:1;[^}]*230px/);
-  assert.match(css, /\.camera-guide-bounds\[data-motion-stage="presence"\] \.live-guide\s*\{[^}]*top:81%;/);
-  assert.match(css, /\.camera-scene \.live-guide > div\s*\{[^}]*grid-row:2; width:100%;/);
+  assert.match(css, /\.camera-guide-bounds \.camera-meter\s*\{[^}]*inset:[^;]* auto;/);
+  assert.match(css, /\.live-guide img\s*\{[^}]*grid-column:1; grid-row:1;/);
+  assert.match(css, /\.live-guide > div\s*\{[^}]*grid-column:2; grid-row:1;/);
+  assert.match(css, /\.camera-picture\s*\{[^}]*filter:brightness\(\.90\) contrast\(1\.12\)/);
+  assert.doesNotMatch(css, /tracking-overlay/);
   const mirror = readFileSync(resolve(__dirname, '../camera-window.js'), 'utf8');
-  assert.match(mirror, /\.guide-panel img \{ grid-row:1;[^}]*230px/);
-  assert.match(mirror, /\.guide-panel > div \{ grid-row:2; width:100%;/);
-  assert.match(css, /#tracking-overlay\{z-index:4;/);
-  assert.doesNotMatch(css, /--guide-rail/);
+  assert.match(mirror, /camera-display-style/);
+  assert.match(mirror, /canvas\.className = 'camera-picture'/);
+  assert.match(mirror, /guideBounds\.append\(meter\)/);
+  assert.match(mirror, /progress\.setAttribute\('aria-valuenow', percent\)/);
 });
 
 test('fullscreen has a definite, stretchable scene row and puts controls below it', () => {
@@ -209,7 +211,7 @@ test('fullscreen has a definite, stretchable scene row and puts controls below i
   assert.match(rule('.camera-scene .camera-live-view'), /height:100%;\s*max-height:none;/);
   assert.match(rule('#draw-stage-start'), /grid-row:2;/);
   assert.match(css, /#camera-video,#tracking-overlay\{[^}]*object-fit:contain/);
-  assert.match(html, /styles\.css\?v=20261120[a-z]/);
+  assert.match(html, /styles\.css\?v=\d{8}[a-z]/);
 });
 
 

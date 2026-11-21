@@ -1,0 +1,60 @@
+/* Presentation-only tone correction. Pose inference still reads the raw video
+   (or its own independently normalized input); the tracking overlay is untouched. */
+.camera-picture { filter:brightness(.90) contrast(1.12); }
+
+/* Keep overlays inside the painted video, not the black side bars. */
+.camera-guide-bounds {
+  position:absolute; inset:var(--fit-y,0px) var(--fit-x,0px); z-index:5;
+  visibility:hidden; pointer-events:none; container-type:inline-size;
+}
+.camera-guide-bounds[data-frame-fit="ready"] { visibility:visible; }
+.camera-live-view:not(.is-live) .camera-guide-bounds,
+.camera-live-view.is-live .camera-label { visibility:hidden; }
+
+.camera-guide-bounds .camera-meter {
+  position:absolute; inset:clamp(5px,1.3cqw,14px) clamp(6px,2cqw,20px) auto;
+  display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(6px,1.3cqw,13px);
+  margin:0; padding:clamp(4px,.8cqw,8px) clamp(7px,1.4cqw,14px);
+  color:#f2ffdf; background:#102720ed; border:1px solid #f4fff47a; border-radius:10px;
+  font:700 clamp(12px,2.3cqw,23px)/1.2 KERISBaeum,sans-serif; font-variant-numeric:tabular-nums;
+}
+.camera-guide-bounds .camera-meter .progress-track {
+  height:clamp(6px,1.4cqw,13px); margin:0; width:100%; border-radius:999px;
+  overflow:hidden; background:#6f8576;
+}
+.camera-guide-bounds .progress-track > span {
+  display:block; height:100%; width:0; border-radius:inherit; background:#d9fca0; transition:width .15s;
+}
+
+.camera-guide-bounds .live-guide {
+  position:absolute; inset:auto clamp(6px,2cqw,20px) clamp(5px,1.3cqw,14px);
+  width:auto; min-width:0; margin:0; padding:0; border:0; background:none; color:#fff;
+  display:grid; grid-template-columns:auto minmax(0,1fr); align-items:end; gap:clamp(5px,1.5cqw,16px);
+}
+.camera-guide-bounds .live-guide img {
+  grid-column:1; grid-row:1; display:block; width:auto;
+  height:clamp(26px,calc(var(--fit-height,240px) * .29),200px);
+  max-width:28cqw; max-height:28cqw; aspect-ratio:1; object-fit:contain;
+  background:#faffebd9; border:1px solid #fff9; border-radius:12px; padding:2px;
+}
+.camera-guide-bounds .live-guide > div {
+  grid-column:2; grid-row:1; min-width:0; padding:clamp(4px,1.1cqw,12px) clamp(7px,1.8cqw,20px);
+  text-align:left; border:1px solid #f4fff481; border-radius:12px;
+  background:#102720f2; box-shadow:0 4px 18px #0007;
+}
+.camera-guide-bounds .live-guide :is(h1,h3) {
+  margin:0; font:700 clamp(14px,min(3.6cqw,calc(var(--fit-height,240px) * .07)),40px)/1.15 SchoolPoster,KERISBaeum,sans-serif;
+  word-break:keep-all; overflow-wrap:anywhere;
+}
+.camera-guide-bounds .live-guide p {
+  margin:.28em 0 0; font-size:clamp(11px,min(2.1cqw,calc(var(--fit-height,240px) * .042)),22px);
+  line-height:1.3; color:#f0f8e7; word-break:keep-all; overflow-wrap:anywhere;
+}
+.camera-guide-bounds[data-motion-stage="presence"] .live-guide {
+  left:50%; right:auto; transform:translateX(-50%); display:block; width:max-content; max-width:96%;
+}
+.camera-guide-bounds[data-motion-stage="presence"] .live-guide > div { text-align:center; }
+.camera-guide-bounds[data-motion-stage="presence"] .live-guide p { display:none; }
+@media(prefers-reduced-motion:reduce) {
+  .camera-guide-bounds .progress-track > span { transition:none; }
+}

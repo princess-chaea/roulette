@@ -66,21 +66,9 @@
       .feed { position:relative; display:grid; place-items:center; min-height:0; overflow:hidden; }
       canvas { position:absolute; inset:0; height:100%; width:100%; object-fit:contain; }
       .waiting { padding:1rem; color:#edf5d7; font-size:clamp(18px,3vw,31px); text-align:center; }
-      .guide-bounds { position:absolute; inset:var(--fit-y,0px) var(--fit-x,0px); z-index:1; display:flex; align-items:flex-end; justify-content:center; visibility:hidden; pointer-events:none; container-type:inline-size; }
-      .guide-bounds[data-frame-fit="ready"] { visibility:visible; }
       .feed-tracking { z-index:2; pointer-events:none; }
-      .guide-panel { display:grid; grid-template-columns:minmax(0,1fr); justify-items:center; align-items:end; width:min(90%,760px); min-width:0; gap:clamp(3px,.8cqw,8px); margin:0 0 clamp(3px,1cqw,12px); color:#fff; }
-      .guide-panel img { grid-row:1; display:block; width:auto; height:clamp(24px,calc(var(--fit-height,240px) * .32),230px); max-width:42cqw; max-height:40cqw; aspect-ratio:1; object-fit:contain; background:#faffebd9; border:1px solid #fff9; border-radius:14px; padding:2px; }
-      .guide-panel > div { grid-row:2; width:100%; padding:clamp(4px,1cqw,11px) clamp(9px,2cqw,24px); min-width:0; text-align:center; border:1px solid #f4fff481; border-radius:12px; background:#102720f2; box-shadow:0 4px 18px #0007; }
-      h1 { margin:0; font:700 clamp(15px,min(4cqw,calc(var(--fit-height,240px) * .078)),44px)/1.15 SchoolPoster,KERISBaeum,sans-serif; word-break:keep-all; overflow-wrap:anywhere; }
-      .guide-panel p { margin:.25em 0 0; font-size:clamp(11px,min(2.25cqw,calc(var(--fit-height,240px) * .044)),23px); line-height:1.28; color:#f0f8e7; word-break:keep-all; }
-      .guide-bounds[data-motion-stage="presence"] .guide-panel { position:absolute; top:81%; bottom:auto; left:50%; transform:translateX(-50%); display:block; width:max-content; max-width:96%; margin:0; }
-      .guide-bounds[data-motion-stage="presence"] .guide-panel > div { padding:clamp(3px,1cqw,8px) clamp(7px,2cqw,16px); text-align:center; }
-      .guide-bounds[data-motion-stage="presence"] h1 { font-size:clamp(12px,3.45cqw,32px); line-height:1.16; word-break:keep-all; }
-      .guide-bounds[data-motion-stage="presence"] p { display:none; }
       footer { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:clamp(8px,1.5vw,22px); padding:8px clamp(10px,2vw,24px); background:#fafbf3; }
-      .feedback { margin:0 0 3px; color:#557047; }
-      progress { width:100%; height:8px; accent-color:#6d914c; }
+      .feedback { margin:0; color:#557047; font-size:13px; }
       nav { display:flex; flex-wrap:wrap; justify-content:flex-end; gap:5px; max-width:19rem; }
       button { border:1px solid #c9d8c2; border-radius:8px; background:#fff; color:#193b32; font:700 13px KERISBaeum,sans-serif; padding:.6em .7em; cursor:pointer; }
       .result { border:0; border-radius:28px; padding:clamp(24px,5vw,52px); width:min(90vw,620px); text-align:center; color:#193b32; background:#fff; box-shadow:0 20px 80px #0005; max-height:92dvh; overflow:auto; }
@@ -95,16 +83,16 @@
       }
     `);
 
-    // Share the exact same scene stylesheet. Copy loaded rules to avoid
-    // delaying a win effect while a popup stylesheet request is in flight.
-    const fanfareStyle = source('result-fanfare-style');
-    if (fanfareStyle) {
+    // Share the exact camera and prize styles with the main window.
+    for (const id of ['camera-display-style', 'result-fanfare-style']) {
+      const sharedStyle = source(id);
+      if (!sharedStyle) continue;
       try {
-        const rules = Array.from(fanfareStyle.sheet.cssRules, rule => rule.cssText);
+        const rules = Array.from(sharedStyle.sheet.cssRules, rule => rule.cssText);
         element('style', doc.head, rules.join('\n'));
       } catch {
-        const link = doc.importNode(fanfareStyle, false);
-        link.href = fanfareStyle.href;
+        const link = doc.importNode(sharedStyle, false);
+        link.href = sharedStyle.href;
         doc.head.append(link);
       }
     }
@@ -124,6 +112,7 @@
     const feed = element('div', stage);
     feed.className = 'feed';
     const canvas = element('canvas', feed);
+    canvas.className = 'camera-picture';
     canvas.setAttribute('aria-label', '거울 카메라 영상과 동작 인식 표시');
     const context = canvas.getContext('2d');
     const tracking = element('canvas', feed);
@@ -133,9 +122,15 @@
     const waiting = element('div', feed);
     waiting.className = 'waiting';
     const guideBounds = element('div', feed);
-    guideBounds.className = 'guide-bounds';
+    guideBounds.className = 'camera-guide-bounds';
+    const meter = doc.importNode(source('motion-progress').parentElement, true);
+    for (const node of meter.querySelectorAll('[id]')) node.removeAttribute('id');
+    guideBounds.append(meter);
+    const progress = meter.querySelector('[role="progressbar"]');
+    const progressFill = progress.firstElementChild;
+    const progressNumber = meter.lastElementChild;
     const guidePanel = element('aside', guideBounds);
-    guidePanel.className = 'guide-panel';
+    guidePanel.className = 'live-guide';
     guidePanel.setAttribute('aria-label', '현재 동작 안내');
     const guide = element('img', guidePanel);
     guide.alt = '';
@@ -143,12 +138,8 @@
     const title = element('h1', instructions);
     const description = element('p', instructions);
     const footer = element('footer', doc.body);
-    const meter = element('div', footer);
-    const feedback = element('p', meter);
+    const feedback = element('p', footer);
     feedback.className = 'feedback';
-    const progress = element('progress', meter);
-    progress.max = 100;
-    progress.setAttribute('aria-label', '동작 인식 진행률');
     const controls = element('nav', footer);
     const connect = element('button', controls);
     connect.onclick = () => source('connect-camera').click();
@@ -205,7 +196,9 @@
       title.textContent = source('gesture-title').textContent;
       description.textContent = source('gesture-description').textContent;
       feedback.textContent = source('camera-error').textContent || source('camera-feedback').textContent;
-      progress.value = Number(source('motion-progress').getAttribute('aria-valuenow'));
+      const percent = source('motion-progress').getAttribute('aria-valuenow');
+      progress.setAttribute('aria-valuenow', percent);
+      progressFill.style.width = progressNumber.textContent = percent + '%';
       const originalGuide = source('live-guide-image');
       if (guide.src !== originalGuide.src) guide.src = originalGuide.src;
       guide.hidden = originalGuide.hidden;
@@ -225,7 +218,7 @@
       if (view !== current || popup.closed) { release(current); return; }
       const live = !video.hidden && video.readyState >= 2 && video.videoWidth > 0;
       waiting.hidden = live;
-      canvas.hidden = !live;
+      guideBounds.hidden = canvas.hidden = !live;
       tracking.hidden = !live;
       if (live) {
         const width = video.videoWidth, height = video.videoHeight;
