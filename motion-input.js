@@ -83,15 +83,15 @@
         else if (time - this.othersSeen > BYSTANDER_MEMORY_MS) this.others = [];
       };
       if (!this.locked) {
-        const eligible = bodies.filter(body => body.eligible).sort((a, b) => priority(b) - priority(a));
+        const eligible = bodies.filter(body => body.eligible).sort((a, b) =>
+          priority(b) - priority(a) || Math.abs(a.x - .5) - Math.abs(b.x - .5) || a.x - b.x || a.y - b.y);
         const continuing = this.current && eligible
           .filter(body => Number.isFinite(similar(this.current, body, aspect)))
           .sort((a, b) => similar(this.current, a, aspect) - similar(this.current, b, aspect))[0];
-        let winner = continuing && priority(eligible[0]) < priority(continuing) * 1.10 ? continuing : eligible[0];
-        if (winner && eligible.some(body => body !== winner &&
-            priority(body) >= priority(winner) * .92 && similar(winner, body, aspect, 'strict') < .24)) {
-          winner = null;
-        }
+        // At the start, select one credible central person rather than
+        // withholding the cue from the whole group. Continue their dwell when
+        // two candidates are close, regardless of the model's ordering.
+        const winner = continuing && priority(eligible[0]) < priority(continuing) * 1.10 ? continuing : eligible[0];
         const changed = !!this.current && winner !== continuing;
         this.current = winner || null;
         if (winner) {
@@ -111,8 +111,17 @@
         .sort((a, b) => a.cost - b.cost);
       const chosen = candidates[0];
       const recentOthers = time - this.othersSeen <= BYSTANDER_MEMORY_MS ? this.others : [];
-      const confusable = chosen && (
-        (candidates[1] && candidates[1].cost - chosen.cost < .24) ||
+      const second = candidates[1];
+      // When both people are still visible, a well-separated match to both
+      // known tracks can keep the original foreground participant active.
+      // Single-person returns and nearly identical poses use the stricter gate.
+      const separatedTracks = !gap && chosen && second && !chosen.body.softShoulder &&
+        chosen.cost <= .10 && second.cost - chosen.cost >= .07 && recentOthers.some(other => {
+          const otherMatch = similar(other, second.body, aspect, 'strict');
+          return otherMatch <= .10 && similar(other, chosen.body, aspect, 'strict') >= otherMatch + .07;
+        });
+      const confusable = chosen && !separatedTracks && (
+        (second && second.cost - chosen.cost < .24) ||
         recentOthers.some(body => similar(body, chosen.body, aspect, 'strict') <= chosen.cost + .10)
       );
       if (chosen && !confusable && (!gap || (this.pending &&
@@ -124,17 +133,26 @@
           bodyConfidence: chosen.body.softShoulder ? SOFT_SHOULDER_CONFIDENCE : undefined };
       }
 
-      // Preserve the existing one-shoulder allowance only for a continuously
-      // seen person during a crank, never as a way to acquire or reacquire one.
-      if (!chosen && !gap && !confusable && mode === 'circle' && poses?.length === 1) {
-        const points = poses[0];
-        const partial = [11, 12].filter(i => signal(points?.[i]));
-        const near = (body, radius) => [0, partial[0]].every(i =>
-          signal(points[i]) && Math.hypot(points[i].x - body.points[i].x,
-            (points[i].y - body.points[i].y) / aspect) <= radius);
-        if (partial.length === 1 && near(this.current, this.current.span * .29) &&
-            !recentOthers.some(body => near(body, body.span * .33))) {
-          return { points };
+      // A partly obscured foreground can keep a held crank when the
+      // other detected torsos are clearly smaller in the frame. Never use
+      // this exception to acquire or reacquire a participant.
+      if (!chosen && !gap && mode === 'circle') {
+        const observed = (poses || []).filter(Boolean);
+        for (const points of observed) {
+          const partial = [11, 12].filter(i => signal(points?.[i]));
+          if (partial.length !== 1) continue;
+          const near = (body, radius) => [0, partial[0]].every(i =>
+            signal(points[i]) && Math.hypot(points[i].x - body.points[i].x,
+              (points[i].y - body.points[i].y) / aspect) <= radius);
+          if (!near(this.current, this.current.span * .29) ||
+              recentOthers.some(body => near(body, body.span * .33))) continue;
+          const others = observed.filter(other => other !== points);
+          const clearlyBehind = others.length > 0 && crankShoulder === partial[0] &&
+            signal(points[crankShoulder + 4], .45) && others.every(other => {
+              const body = upperBody(other, aspect);
+              return body && body.span < this.current.span * .70 && !near(body, body.span * .33);
+            });
+          if (!others.length || clearlyBehind) return { points };
         }
       }
 

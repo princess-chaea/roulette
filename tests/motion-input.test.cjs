@@ -65,10 +65,10 @@ test('locked round uses continuity rather than a new largest body and rejects a 
   assert.equal(tracker.select([far], 2300, 1, 'presence').points, far);
 });
 
-test('similar overlapping poses pause rather than choosing the first detection, including during acquisition', () => {
+test('the group picks one centered candidate on acquisition but pauses a near-indistinguishable locked overlap', () => {
   const tracker = new ParticipantTracker();
-  const a = person({ x: .5 }), b = person({ x: .518 });
-  assert.equal(tracker.select([b, a], 0, 1, 'presence').points, null);
+  const a = person({ x: .5 }), b = person({ x: .502 });
+  assert.equal(tracker.select([b, a], 0, 1, 'presence').points, a);
   assert.equal(tracker.select([a], 100, 1, 'presence').points, a);
   tracker.lock();
   assert.equal(tracker.select([b, a], 200, 1, 'pose').points, null);
@@ -267,4 +267,37 @@ test('HD recovery runs white or dark correction without changing the camera or i
     assert.deepEqual([frame.width,frame.height],[640,360]);
     assert.deepEqual([video.videoWidth,video.videoHeight],[1920,1080]);
   }
+});
+
+test('known adjacent participants both visible do not interrupt a distinctly matched foreground', () => {
+  const tracker=new ParticipantTracker(), a=person(), b=person({x:.518,raised:true});
+  assert.equal(tracker.select([b,a],0,1,'presence').points,a);
+  tracker.lock();
+  assert.equal(tracker.select([a,b],100,1,'circle',11).points,a);
+  assert.equal(tracker.select([b,a],200,1,'circle',11).points,a);
+  assert.equal(tracker.select([b],300,1,'circle',11).points,null);
+});
+
+test('a much smaller passerby does not interrupt a visible winding hand and shoulder', () => {
+  const tracker=new ParticipantTracker(), participant=person(), partial=participant.slice();
+  partial[12]=null;
+  const passer=person({span:.13,x:.50});
+  tracker.select([participant],0,1,'presence'); tracker.lock();
+  assert.equal(tracker.select([passer,partial],100,1,'circle',11).points,partial);
+  assert.equal(tracker.select([passer],200,1,'circle',11).points,null);
+  assert.equal(tracker.select([passer,partial],300,1,'circle',11).points,null);
+});
+
+test('a small group can complete central readiness without relying on model order', () => {
+  const tracker=new ParticipantTracker(), flow=new MotionFlow(), a=person(), b=person({x:.52});
+  let result;
+  for(let t=0;t<=1000;t+=100) {
+    const mode=flow.mode;
+    const sel=tracker.select(t%200===0?[b,a]:[a,b],t,1,mode);
+    assert.equal(sel.points,a);
+    result=flow.update(sel.points,t);
+    if(mode==='presence'&&result.mode==='pose')tracker.lock();
+  }
+  assert.equal(result.mode,'pose');
+  assert.equal(tracker.select([b,a],1100,1,'pose').points,a);
 });
