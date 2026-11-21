@@ -150,3 +150,55 @@ test('analysis sizing preserves aspect ratio and never scales a small camera up'
   assert.deepEqual(analysisSize(1080, 1920), { width:270, height:480 });
   assert.deepEqual(analysisSize(320, 240), { width:320, height:240 });
 });
+
+test('one weak shoulder can sustain already locked pose, but not acquire, reacquire, or drag the anchor', () => {
+  const tracker=new ParticipantTracker(), main=person({raised:true});
+  const soft=main.map(p=>p&&({...p}));
+  soft[12].visibility=.47;
+  assert.equal(tracker.select([soft],0,1,'presence').points,null);
+  tracker.select([main],100,1,'presence'); tracker.lock();
+  assert.equal(tracker.select([soft],200,1,'pose').points,soft);
+  assert.equal(tracker.select([soft],300,1,'pose').bodyConfidence,.42);
+  assert.equal(tracker.select([soft],500,1,'pose').points,soft);
+  assert.equal(tracker.select([soft],800,1,'pose').points,null);
+  assert.equal(tracker.select([soft],900,1,'pose').points,null);
+  assert.equal(tracker.select([main],1000,1,'pose').points,null);
+  assert.equal(tracker.select([main],1100,1,'pose').points,main);
+  const weakFace=soft.map(p=>p&&({...p}));
+  weakFace[0].visibility=.48;
+  assert.equal(tracker.select([weakFace],1200,1,'pose').points,null);
+});
+
+test('a briefly vanished bystander remains a distractor rather than becoming the participant', () => {
+  const tracker=new ParticipantTracker();
+  const main=person(), other=person({x:.55,span:.23,raised:true});
+  tracker.select([main],0,1,'presence'); tracker.lock();
+  assert.equal(tracker.select([main,other],100,1,'pose').points,main);
+  assert.equal(tracker.select([main],200,1,'pose').points,main);
+  const occluded=tracker.select([other],300,1,'pose');
+  assert.equal(occluded.points,null);
+  assert.equal(occluded.overlap,true);
+  assert.equal(tracker.select([main],400,1,'pose').points,null);
+  assert.equal(tracker.select([main],500,1,'pose').points,main);
+});
+
+test('operator keeps acquired pose dwell across a supported soft-shoulder sighting', () => {
+  const tracker=new ParticipantTracker(), flow=new MotionFlow();
+  const clear=person({raised:true}), soft=clear.map(p=>p&&({...p}));
+  soft[12].presence=.48;
+  const frame=(p,t)=>{
+    const before=flow.mode;
+    const pick=tracker.select([p],t,1,before);
+    const out=flow.update(pick.points,t,1,pick.bodyConfidence);
+    if(before==='presence'&&out.mode==='pose')tracker.lock();
+    return out;
+  };
+  for(let t=0;t<=1100;t+=100)frame(clear,t);
+  const early=frame(clear,1200);
+  const continued=frame(soft,1300);
+  assert.equal(continued.mode,'pose');
+  assert.ok(continued.progress>early.progress);
+  const confused=frame(person({x:.72,span:.11,raised:true}),1400);
+  assert.equal(confused.progress,continued.progress);
+  assert.equal(confused.matched,false);
+});

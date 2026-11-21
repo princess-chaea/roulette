@@ -134,11 +134,13 @@
             this.preGestureLostAt = null;
           }
         } else this.preGestureLostAt = null;
-        const { points, changed, paused } = selection;
+        const { points, changed, paused, overlap, bodyConfidence } = selection;
         if (changed) this.detector.reset();
-        const recognition = this.detector.update(points, time, aspect);
+        const recognition = this.detector.update(points, time, aspect, bodyConfidence);
         if (previousMode === 'presence' && recognition.mode !== 'presence') this.participant.lock();
-        if (paused) recognition.message = '같은 참가자가 화면 가운데에 다시 보이면 이어서 진행해요.';
+        if (paused) recognition.message = overlap
+          ? '뒤 사람과 겹쳤어요. 한 발 앞으로 나오면 이어서 진행해요.'
+          : '같은 참가자의 얼굴과 팔이 다시 보이면 이어서 진행해요.';
         this.recovering = !points;
         this.draw(points, recognition);
         this.onResult(recognition);

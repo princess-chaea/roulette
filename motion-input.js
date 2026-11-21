@@ -6,9 +6,15 @@
     Math.min(p.visibility ?? 1, p.presence ?? 1) >= minimum;
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 
-  function upperBody(points, aspect) {
+  const SOFT_SHOULDER_CONFIDENCE = .42;
+  const SOFT_SHOULDER_MS = 650;
+  const BYSTANDER_MEMORY_MS = 450;
+
+  function upperBody(points, aspect, allowSoft = false) {
     const [nose, left, right] = [0, 11, 12].map(i => points?.[i]);
-    if (![nose, left, right].every(p => signal(p))) return null;
+    const strongShoulders = [left, right].filter(p => signal(p)).length;
+    const softShoulder = strongShoulders === 1 && allowSoft && [left, right].every(p => signal(p, SOFT_SHOULDER_CONFIDENCE));
+    if (!signal(nose) || (strongShoulders !== 2 && !softShoulder)) return null;
     const x = (left.x + right.x) / 2, y = (left.y + right.y) / 2;
     const span = Math.hypot(left.x - right.x, (left.y - right.y) / aspect);
     const rise = (y - nose.y) / aspect;
@@ -16,7 +22,7 @@
     const faceOffset = Math.abs(nose.x - x) / span;
     const shoulderSlope = Math.abs(left.y - right.y) / (span * aspect);
     const proportion = rise / span;
-    return { points, x, y, span, rise, nose, proportion, faceOffset, shoulderSlope,
+    return { points, x, y, span, rise, nose, proportion, faceOffset, shoulderSlope, softShoulder,
       confidence: Math.min(...[nose, left, right].map(p => Math.min(p.visibility ?? 1, p.presence ?? 1))),
       eligible: x >= .25 && x <= .75 && faceOffset <= .74 && shoulderSlope <= .74 &&
         proportion >= .12 && proportion <= 1.60 };
@@ -51,7 +57,7 @@
   class ParticipantTracker {
     constructor() { this.reset(); }
     reset() {
-      this.current = null; this.anchor = null; this.lastSeen = -Infinity;
+      this.current = null; this.anchor = null; this.lastSeen = this.lastStrongSeen = this.othersSeen = -Infinity;
       this.locked = false; this.missed = false; this.pending = null; this.others = [];
     }
     lock() {
@@ -60,7 +66,16 @@
       this.anchor = this.current;
     }
     select(poses, time, aspect, mode) {
-      const bodies = (poses || []).map(points => upperBody(points, aspect)).filter(Boolean);
+      const gap = this.missed || time - this.lastSeen > 350;
+      // A padded sleeve or bag strap can briefly weaken one shoulder.
+      // Do not use this as evidence for acquiring or reacquiring a person.
+      const allowSoft = this.locked && !gap && mode === 'pose' && time - this.lastStrongSeen <= SOFT_SHOULDER_MS;
+      const bodies = (poses || []).map(points => upperBody(points, aspect, allowSoft)).filter(Boolean);
+      const rememberOthers = winner => {
+        const others = bodies.filter(body => body !== winner && !body.softShoulder);
+        if (others.length) { this.others = others; this.othersSeen = time; }
+        else if (time - this.othersSeen > BYSTANDER_MEMORY_MS) this.others = [];
+      };
       if (!this.locked) {
         const eligible = bodies.filter(body => body.eligible).sort((a, b) => priority(b) - priority(a));
         const continuing = this.current && eligible
@@ -74,14 +89,14 @@
         const changed = !!this.current && winner !== continuing;
         this.current = winner || null;
         if (winner) {
-          this.lastSeen = time;
-          this.others = bodies.filter(body => body !== winner);
+          this.lastSeen = this.lastStrongSeen = time;
+          rememberOthers(winner);
         }
         return { points: winner?.points ?? null, changed };
       }
 
-      const gap = this.missed || time - this.lastSeen > 350;
-      const candidates = bodies.map(body => ({ body, cost: similar(this.current, body, aspect, gap ? 'return' : 'live') }))
+      const candidates = bodies.map(body => ({ body, cost: similar(this.current, body, aspect,
+        body.softShoulder ? 'strict' : gap ? 'return' : 'live') }))
         .filter(({ body, cost }) => Number.isFinite(cost) && body.x >= .25 && body.x <= .75 &&
           // Frame-to-frame motion can vary, but scale cannot drift indefinitely
           // toward a more distant bystander after the participant was confirmed.
@@ -89,16 +104,18 @@
           Math.abs(Math.log(body.proportion / this.anchor.proportion)) <= .85)
         .sort((a, b) => a.cost - b.cost);
       const chosen = candidates[0];
-      const recentOthers = this.others;
+      const recentOthers = time - this.othersSeen <= BYSTANDER_MEMORY_MS ? this.others : [];
       const confusable = chosen && (
         (candidates[1] && candidates[1].cost - chosen.cost < .24) ||
         recentOthers.some(body => similar(body, chosen.body, aspect, 'strict') <= chosen.cost + .10)
       );
       if (chosen && !confusable && (!gap || (this.pending &&
           Number.isFinite(similar(this.pending, chosen.body, aspect, 'strict'))))) {
-        this.current = chosen.body; this.lastSeen = time; this.missed = false; this.pending = null;
-        this.others = bodies.filter(body => body !== chosen.body);
-        return { points: chosen.body.points };
+        if (!chosen.body.softShoulder) { this.current = chosen.body; this.lastStrongSeen = time; }
+        this.lastSeen = time; this.missed = false; this.pending = null;
+        rememberOthers(chosen.body);
+        return { points: chosen.body.points,
+          bodyConfidence: chosen.body.softShoulder ? SOFT_SHOULDER_CONFIDENCE : undefined };
       }
 
       // Preserve the existing one-shoulder allowance only for a continuously
@@ -118,7 +135,7 @@
       this.missed = true;
       this.pending = chosen && !confusable ? chosen.body : null;
       // In an overlap, do not learn a new person's location from the ambiguous detections.
-      return { points: null, paused: true };
+      return { points: null, paused: true, overlap: Boolean(confusable) };
     }
   }
 

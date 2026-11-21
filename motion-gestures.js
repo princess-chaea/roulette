@@ -263,12 +263,12 @@
       return last.frame;
     }
 
-    update(landmarks, timestampMs, aspectRatio = 1) {
+    update(landmarks, timestampMs, aspectRatio = 1, bodyConfidence = this.tuning.confidence) {
       if (this.done) return { ...this.lastResult, matched: false };
       if (!Number.isFinite(timestampMs) || !Number.isFinite(aspectRatio) || aspectRatio <= 0) {
         return this.interrupt('카메라에 상체를 보여 주세요.');
       }
-      const measured = bodyFrame(landmarks, aspectRatio, this.tuning.confidence);
+      const measured = bodyFrame(landmarks, aspectRatio, bodyConfidence);
       const frame = measured ?? this.cachedFrame(landmarks, timestampMs, aspectRatio);
       if (!frame) {
         return this.interrupt('얼굴과 양쪽 어깨가 화면에 보이도록 해 주세요.');
@@ -472,10 +472,12 @@
       this.detector.setMode('pose');
     }
 
-    update(points, time, aspect = 1) {
+    update(points, time, aspect = 1, continuityConfidence) {
+      const bodyConfidence = this.mode === 'pose' && Number.isFinite(continuityConfidence)
+        ? clamp(continuityConfidence, .42, this.tuning.confidence) : this.tuning.confidence;
       if (this.done) return { ...this.lastResult, matched: false };
       const frame = Number.isFinite(time) && Number.isFinite(aspect) && aspect > 0
-        ? bodyFrame(points, aspect, this.tuning.confidence) ?? this.detector.cachedFrame(points, time, aspect) : null;
+        ? bodyFrame(points, aspect, bodyConfidence) ?? this.detector.cachedFrame(points, time, aspect) : null;
       if (!frame || frame.x < 0.25 || frame.x > 0.75 || frame.span < 0.08 || frame.span > 0.65 ||
           points[0].y < 0.05 || points[0].y > 0.60) {
         if (this.mode === 'presence') this.reset();
@@ -510,7 +512,7 @@
         this.detector.setMode('pose');
       }
 
-      let result = this.detector.update(points, time, aspect);
+      let result = this.detector.update(points, time, aspect, bodyConfidence);
       if (this.mode === 'pose' && result.matched) {
         this.mode = 'circle';
         this.detector.setMode('circle');
